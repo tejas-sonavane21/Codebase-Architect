@@ -1,0 +1,5 @@
+pocketflow
+google-genai
+python-dotenv
+requests
+gitpython

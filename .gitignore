@@ -1,0 +1,58 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+venv/
+.venv/
+env/
+.env
+
+# Environment Variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+
+# BlackBook Builder Specific
+cloned_repo/
+generated_diagrams/
+codebase_knowledge.xml
+project_map.txt
+file_inventory.json
+diagram_plan.json
+upload_config.json
+responses/
+logs/
+discussion.md
+discussion2.md
+response.txt
+concept.txt
+online_resource.md
+collapse_suggestion.txt
