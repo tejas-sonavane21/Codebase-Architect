@@ -10,6 +10,7 @@ from typing import Optional
 from pocketflow import Node
 
 from utils.gemini_client import GeminiClient
+from utils.rate_limiter import rate_limit_delay
 
 
 ARCHITECT_SYSTEM_PROMPT = """You are a Senior Software Architect specializing in system visualization.
@@ -219,5 +220,8 @@ Propose specific, focused diagrams that would help a developer understand this c
             json.dump(exec_res, f, indent=2)
         
         print(f"📄 Diagram plan saved to: {plan_file}")
+        
+        # Rate limit delay after Architect API call
+        rate_limit_delay("single_api_call")
         
         return "default"

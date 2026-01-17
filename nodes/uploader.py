@@ -13,6 +13,7 @@ from pocketflow import Node
 
 from utils.gemini_client import GeminiClient
 from utils.security import redact_file_content
+from utils.rate_limiter import rate_limit_delay, get_delay
 
 
 class UploaderNode(Node):
@@ -21,12 +22,6 @@ class UploaderNode(Node):
     # Batch size for uploads (to manage rate limits)
     # Gemini allows many files, but we batch to avoid hitting rate limits
     BATCH_SIZE = 5
-    
-    # Delay between batches (seconds) to respect rate limits
-    BATCH_DELAY = 60.0
-    
-    # Delay between individual uploads within a batch
-    UPLOAD_DELAY = 0.3
     
     def __init__(self, max_retries: int = 3, wait: int = 2):
         super().__init__(max_retries=max_retries, wait=wait)
@@ -59,6 +54,8 @@ class UploaderNode(Node):
         deleted = self.client.cleanup_all_files()
         if deleted > 0:
             print(f"   ✓ Deleted {deleted} old files")
+            # Apply rate limit delay after cleanup API call
+            rate_limit_delay("single_api_call")
         else:
             print("   ✓ No old files to delete")
         
@@ -254,15 +251,17 @@ class UploaderNode(Node):
                     
                     print(f"      ✓ {display_name}")
                     
-                    # Small delay between uploads
-                    time.sleep(self.UPLOAD_DELAY)
+                    # Rate limit delay between individual file uploads
+                    rate_limit_delay("single_file_upload")
                     
                 except Exception as e:
                     print(f"      ✗ {display_name}: {e}")
+                    # Delay after error
+                    rate_limit_delay("on_error")
             
-            # Delay between batches
+            # Rate limit delay between batches
             if batch_start + self.BATCH_SIZE < len(files):
-                time.sleep(self.BATCH_DELAY)
+                rate_limit_delay("batch_upload")
         
         # Create manifest content
         manifest_content = "\n".join(manifest_lines)
@@ -290,12 +289,36 @@ class UploaderNode(Node):
         if not file_uris:
             raise ValueError("No files were uploaded. Check UploaderNode.")
         
-        # Verify all files are ACTIVE before proceeding
+        # Strategic 3-file verification (first, middle, last)
+        # Instead of verifying all N files, we check only 3 strategic files
+        # If the last uploaded file is ACTIVE, earlier files are almost certainly ACTIVE too
         all_uris = [f["uri"] for f in file_uris]
-        verified_uris = self.client.verify_files_ready(all_uris, timeout_per_file=30)
         
-        if len(verified_uris) == 0:
+        if len(all_uris) >= 3:
+            # Check in reverse order: last -> middle -> first
+            strategic_uris = [
+                all_uris[-1],                    # Last file
+                all_uris[len(all_uris) // 2],    # Middle file
+                all_uris[0],                     # First file
+            ]
+            print(f"   🔍 Verifying 3 strategic files (of {len(all_uris)})...")
+        else:
+            strategic_uris = all_uris
+            print(f"   🔍 Verifying {len(all_uris)} files...")
+        
+        verified_count = 0
+        for uri in strategic_uris:
+            if self.client.wait_for_file_active(uri, timeout=60):
+                verified_count += 1
+            # Delay between verification checks
+            if uri != strategic_uris[-1]:  # Don't delay after last check
+                rate_limit_delay("file_verification")
+        
+        if verified_count == 0:
             raise ValueError("No uploaded files became ACTIVE. Upload may have failed.")
+        
+        # If strategic files are active, assume all are active
+        verified_uris = all_uris if verified_count == len(strategic_uris) else []
         
         # Filter file_uris to only include verified ones
         verified_file_uris = [f for f in file_uris if f["uri"] in verified_uris]

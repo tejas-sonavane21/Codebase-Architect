@@ -9,6 +9,7 @@ from typing import Optional
 from pocketflow import Node
 
 from utils.gemini_client import GeminiClient
+from utils.rate_limiter import rate_limit_delay
 
 
 DRAFTER_SYSTEM_PROMPT = """You are a Strict PlantUML Generator.
@@ -187,5 +188,14 @@ class DrafterNode(Node):
         
         shared["current_plantuml"] = exec_res
         shared["current_diagram_info"] = prep_res["diagram"]
+        
+        # Rate limit delay after diagram generation
+        retry_count = prep_res.get("retry_count", 0)
+        if retry_count > 0:
+            # This was a retry, use shorter error cooldown
+            rate_limit_delay("on_error")
+        else:
+            # Normal diagram generation
+            rate_limit_delay("drafter_per_diagram")
         
         return "validate"

@@ -12,6 +12,7 @@ from typing import Optional, List, Dict, Tuple
 from pocketflow import Node
 
 from utils.gemini_client import GeminiClient
+from utils.rate_limiter import rate_limit_delay, get_delay
 
 
 # Threshold for keeping full content vs summarizing
@@ -19,7 +20,6 @@ SMALL_FILE_THRESHOLD = 50  # lines
 
 # Batch configuration
 BATCH_SIZE = 2  # files per batch (excluding summary)
-BATCH_DELAY = 2.0  # seconds between batches (rate limit protection)
 
 # System prompts for summarization
 SUMMARIZER_SYSTEM_PROMPT = """You are a code analysis expert. Your task is to analyze source code files and produce structured XML summaries.
@@ -266,6 +266,9 @@ Return the COMPLETE updated XML with the new file entries added."""
             error_msg = str(e)
             print(f"      ⚠ Batch failed: {error_msg[:100]}...")
             
+            # Rate limit delay after error
+            rate_limit_delay("on_error", show_progress=False)
+            
             # If not already retrying with single file, try that
             if not retry_with_single and len(batch_files) > 1:
                 return self._process_batch(batch_files, current_xml, clone_path, retry_with_single=True)
@@ -358,8 +361,9 @@ Return the COMPLETE updated XML."""
             else:
                 failed += len(batch)
             
-            # Rate limit protection
-            time.sleep(BATCH_DELAY)
+            # Rate limit delay between summarizer batches
+            if batch_start + BATCH_SIZE < len(sorted_files):
+                rate_limit_delay("summarizer_batch")
         
         print(f"   ✓ Pass 1 complete: {processed} files processed, {failed} failed")
         
@@ -367,6 +371,9 @@ Return the COMPLETE updated XML."""
         print(f"   🔗 Pass 2: Detecting cross-file relationships...")
         
         self.knowledge_xml = self._add_relationships(self.knowledge_xml)
+        
+        # Rate limit delay after Pass 2 API call
+        rate_limit_delay("single_api_call")
         
         print(f"   ✓ Pass 2 complete: Relationships identified")
         
@@ -414,5 +421,8 @@ Return the COMPLETE updated XML."""
         shared["knowledge_uri"] = upload_result  # {uri, mime_type}
         
         print(f"✓ Codebase knowledge ready ({exec_res['files_processed']} files distilled)")
+        
+        # Rate limit delay after upload
+        rate_limit_delay("single_api_call")
         
         return "default"

@@ -10,6 +10,7 @@ from typing import Optional
 from pocketflow import Node
 
 from utils.gemini_client import GeminiClient
+from utils.rate_limiter import rate_limit_delay
 
 
 SURVEYOR_SYSTEM_PROMPT = """You are a Technical Lead reviewing a codebase structure.
@@ -148,5 +149,8 @@ Return paths that would be needed to understand the system architecture and gene
             json.dump(exec_res, f, indent=2)
         
         print(f"📄 Upload config saved to: {config_file}")
+        
+        # Rate limit delay after Gemini API call
+        rate_limit_delay("single_api_call")
         
         return "default"
