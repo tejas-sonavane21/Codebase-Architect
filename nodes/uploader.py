@@ -80,11 +80,17 @@ class UploaderNode(Node):
         
         # Find all source files based on Surveyor's selection
         source_files = []
+        skipped_binary = 0  # Counter for skipped binary files
         
         for include_path in include_paths:
             full_path = os.path.join(clone_path, include_path)
             
             if os.path.isfile(full_path):
+                # Skip binary files even if Gemini included them
+                if not self._is_text_file(include_path):
+                    skipped_binary += 1
+                    continue
+                    
                 source_files.append({
                     "path": full_path,
                     "display_name": include_path,
@@ -104,6 +110,7 @@ class UploaderNode(Node):
                         
                         # Skip binary files
                         if not self._is_text_file(file):
+                            skipped_binary += 1
                             continue
                         
                         source_files.append({
@@ -111,6 +118,9 @@ class UploaderNode(Node):
                             "display_name": rel_path,
                             "is_context": False,
                         })
+        
+        if skipped_binary > 0:
+            print(f"   ⚠ Skipped {skipped_binary} binary files")
         
         # If Surveyor didn't specify paths, use file_inventory to find text files
         if not source_files:

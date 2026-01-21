@@ -19,9 +19,10 @@ load_dotenv()
 class GeminiClient:
     """Wrapper for Google Gemini API with retry logic."""
     
-    MODEL = "gemini-2.5-flash"
+    # Model from .env with fallback default
+    MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite-preview-09-2025")
     MAX_RETRIES = 3
-    BASE_WAIT = 2  # seconds
+    BASE_WAIT = 60 # seconds
     
     def __init__(self, api_key: Optional[str] = None):
         """Initialize the Gemini client.

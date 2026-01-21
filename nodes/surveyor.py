@@ -13,26 +13,43 @@ from utils.gemini_client import GeminiClient
 from utils.rate_limiter import rate_limit_delay
 
 
-SURVEYOR_SYSTEM_PROMPT = """You are a Technical Lead reviewing a codebase structure.
-Your task is to identify which folders and files contain actual source code, business logic, 
-and essential configuration that would be needed to understand the system architecture.
+SURVEYOR_SYSTEM_PROMPT = """You are a Technical Lead selecting files for architectural analysis.
+Your task is to identify source files needed to understand the system architecture.
 
-RULES:
-1. INCLUDE: Source code files (.py, .js, .ts, .java, .go, .rs, etc.)
-2. INCLUDE: Configuration files (package.json, pyproject.toml, Dockerfile, etc.)
-3. INCLUDE: API definitions, schemas, models, controllers, services
-4. EXCLUDE: Test files (unless specifically relevant to architecture)
-5. EXCLUDE: Documentation files (.md, .txt) except README
-6. EXCLUDE: Any path containing: node_modules, dist, build, .git, __pycache__, venv, .venv
-7. EXCLUDE: Lock files, logs, and generated files
+INCLUDE RULES:
+1. Source code: .py, .js, .ts, .java, .go, .rs, .jsx, .tsx, .vue, .svelte
+2. Configuration: package.json, pyproject.toml, Dockerfile, docker-compose.yml, settings files
+3. Core logic: models, views, controllers, services, routes, middleware, utils
+4. Entry points: main.py, app.py, index.js, manage.py
+
+EXCLUDE RULES:
+5. Binary files: ALL files with "type": "binary" in file_inventory.json
+6. Generated/cached: node_modules, dist, build, .git, __pycache__, venv, migrations
+7. Tests: test files unless critical to architecture
+8. Docs: .md, .txt files (except README if it contains architecture info)
+9. Lock files: package-lock.json, poetry.lock, yarn.lock
+
+CRITICAL RULES:
+10. MUTUAL EXCLUSIVITY: A file path CANNOT appear in both include_paths AND exclude_patterns. Choose one.
+11. NO DUPLICATES: If you exclude a file, do NOT also include it. If you include it, do NOT also exclude it.
+12. SMART SELECTION: When similar files exist (e.g., index.html and old_index.html), include ONLY the current version:
+    - SKIP files with prefixes: old_, backup_, deprecated_, _old, _backup, _bak
+    - SKIP files with suffixes: .bak, .backup, .old, _copy
+    - INCLUDE: The non-prefixed, non-suffixed current version
+13. TEMPLATES: For web frameworks (Django, Flask, Rails, React):
+    - INCLUDE: Only key structural templates (base, layout, index, main)
+    - EXCLUDE: All other HTML templates (they follow the same patterns)
+14. STATIC FILES: Exclude CSS/JS unless they contain significant business logic
 
 Return your response as a JSON object with this exact structure:
 {
     "analysis": "Brief 1-2 sentence summary of the project type",
-    "include_paths": ["path/to/include1", "path/to/include2"],
+    "include_paths": ["path/to/file1", "path/to/file2"],
     "exclude_patterns": ["pattern1", "pattern2"],
     "estimated_file_count": 42
 }
+
+FINAL CHECK: Before returning, verify NO file appears in both lists.
 
 Return ONLY the JSON object, no additional text."""
 
