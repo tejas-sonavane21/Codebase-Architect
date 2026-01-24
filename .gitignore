@@ -50,6 +50,7 @@ diagram_plan.json
 upload_config.json
 responses/
 logs/
+test_http/
 discussion.md
 discussion2.md
 response.txt

@@ -90,7 +90,7 @@ class SurveyorNode(Node):
         """
         print("🔬 Analyzing project structure with Gemini...")
         
-        prompt = f"""Analyze this project structure and identify ALL the important source files that are needed to understand the architecture:
+        base_prompt = f"""Analyze this project structure and identify ALL the important source files that are needed to understand the architecture:
 
 PROJECT STRUCTURE:
 ```
@@ -101,47 +101,75 @@ IMPORTANT: You must select ALL files that contain source code, business logic, m
 
 Return paths that would be needed to understand the system architecture and generate accurate diagrams."""
         
-        response = self.client.generate_content(
-            prompt=prompt,
-            system_prompt=SURVEYOR_SYSTEM_PROMPT,
-            temperature=0.3,  # Lower temperature for more consistent JSON
-        )
+        max_parse_retries = 3
+        last_error = None
         
-        # Parse JSON response
-        try:
-            # Handle markdown code blocks if present
-            clean_response = response.strip()
-            if clean_response.startswith("```"):
-                # Remove code block markers
-                lines = clean_response.split("\n")
-                clean_response = "\n".join(lines[1:-1])
+        for attempt in range(max_parse_retries):
+            # Build prompt with error context for retries
+            if attempt == 0:
+                prompt = base_prompt
+            else:
+                print(f"   🔄 Retry {attempt}/{max_parse_retries - 1}: Requesting properly formatted JSON...")
+                prompt = f"""Your previous response was not valid JSON. Error: {last_error}
+
+{base_prompt}
+
+CRITICAL: Return ONLY a valid JSON object. No markdown code blocks, no explanatory text before or after.
+Example format:
+{{"analysis": "...", "include_paths": ["file1.py", "file2.js"], "exclude_patterns": ["*.log"], "estimated_file_count": 10}}"""
             
-            config = json.loads(clean_response)
+            response = self.client.generate_content(
+                prompt=prompt,
+                system_prompt=SURVEYOR_SYSTEM_PROMPT,
+                temperature=0.3,  # Lower temperature for more consistent JSON
+            )
             
-            # Validate required fields
-            if "include_paths" not in config:
-                config["include_paths"] = []
-            if "exclude_patterns" not in config:
-                config["exclude_patterns"] = []
-            if "analysis" not in config:
-                config["analysis"] = "Unknown project type"
-            
-            print(f"   ✓ Analysis: {config['analysis']}")
-            print(f"   ✓ Selected {len(config['include_paths'])} paths for upload")
-            
-            return config
-            
-        except json.JSONDecodeError as e:
-            print(f"   ⚠ Failed to parse Gemini response as JSON: {e}")
-            print(f"   Raw response: {response[:500]}...")
-            
-            # Fallback: include common source directories
-            return {
-                "analysis": "Failed to parse - using defaults",
-                "include_paths": ["src", "lib", "app", "api", "models", "controllers", "services"],
-                "exclude_patterns": ["node_modules", "dist", "build", "__pycache__", ".git"],
-                "estimated_file_count": 50,
-            }
+            # Parse JSON response
+            try:
+                # Handle markdown code blocks if present
+                clean_response = response.strip()
+                if clean_response.startswith("```"):
+                    # Remove code block markers
+                    lines = clean_response.split("\n")
+                    # Find the closing ``` and extract content between
+                    start_idx = 1  # Skip first line with ```json
+                    end_idx = len(lines) - 1
+                    for i in range(len(lines) - 1, 0, -1):
+                        if lines[i].strip() == "```":
+                            end_idx = i
+                            break
+                    clean_response = "\n".join(lines[start_idx:end_idx])
+                
+                config = json.loads(clean_response)
+                
+                # Validate required fields
+                if "include_paths" not in config:
+                    config["include_paths"] = []
+                if "exclude_patterns" not in config:
+                    config["exclude_patterns"] = []
+                if "analysis" not in config:
+                    config["analysis"] = "Unknown project type"
+                
+                print(f"   ✓ Analysis: {config['analysis']}")
+                print(f"   ✓ Selected {len(config['include_paths'])} paths for upload")
+                
+                return config
+                
+            except json.JSONDecodeError as e:
+                last_error = str(e)
+                print(f"   ⚠ Failed to parse Gemini response as JSON (attempt {attempt + 1}/{max_parse_retries}): {e}")
+                if attempt < max_parse_retries - 1:
+                    print(f"   Raw response preview: {response[:300]}...")
+                    # Wait before retry
+                    rate_limit_delay("single_api_call")
+        
+        # All retries exhausted - halt the program
+        print(f"\n❌ CRITICAL ERROR: Failed to get valid JSON response after {max_parse_retries} attempts.")
+        print(f"   Last raw response: {response[:500]}...")
+        raise RuntimeError(
+            f"Surveyor failed: Could not parse Gemini response as valid JSON after {max_parse_retries} attempts. "
+            f"Last error: {last_error}"
+        )
     
     def post(self, shared: dict, prep_res: str, exec_res: dict) -> str:
         """Store the upload configuration.

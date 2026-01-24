@@ -20,7 +20,7 @@ class GeminiClient:
     """Wrapper for Google Gemini API with retry logic."""
     
     # Model from .env with fallback default
-    MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite-preview-09-2025")
+    MODEL = os.getenv("GEMINI_MODEL", "gemma-3-27b-it")
     MAX_RETRIES = 3
     BASE_WAIT = 60 # seconds
     
@@ -35,6 +35,9 @@ class GeminiClient:
             raise ValueError("GEMINI_API_KEY not found. Set it in .env or pass directly.")
         
         self.client = genai.Client(api_key=self.api_key)
+    
+    # Models that don't support system_instruction (Developer Instruction)
+    MODELS_WITHOUT_SYSTEM_INSTRUCTION = {"gemma-3-1b-it", "gemma-3-4b-it", "gemma-3-12b-it", "gemma-3-27b-it"}
     
     def generate_content(
         self,
@@ -54,6 +57,13 @@ class GeminiClient:
         Returns:
             Generated text content.
         """
+        # Check if model supports system instruction
+        model_name = self.MODEL.lower()
+        supports_system_instruction = not any(
+            unsupported in model_name 
+            for unsupported in self.MODELS_WITHOUT_SYSTEM_INSTRUCTION
+        )
+        
         # Build content parts
         contents = []
         
@@ -70,14 +80,21 @@ class GeminiClient:
                 
                 contents.append(types.Part.from_uri(file_uri=uri, mime_type=mime))
         
+        # Handle system prompt based on model capability
+        effective_prompt = prompt
+        if system_prompt and not supports_system_instruction:
+            # Prepend system prompt to user prompt for models without system instruction support
+            effective_prompt = f"<INSTRUCTIONS>\n{system_prompt}\n</INSTRUCTIONS>\n\n<USER_REQUEST>\n{prompt}\n</USER_REQUEST>"
+        
         # Add the text prompt
-        contents.append(prompt)
+        contents.append(effective_prompt)
         
         # Build config
         config = types.GenerateContentConfig(
             temperature=temperature,
         )
-        if system_prompt:
+        # Only set system_instruction if model supports it
+        if system_prompt and supports_system_instruction:
             config.system_instruction = system_prompt
         
         # Retry with exponential backoff
