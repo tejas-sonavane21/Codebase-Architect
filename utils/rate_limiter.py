@@ -111,10 +111,35 @@ class TokenBucket:
         return self._get_current_usage(), self.capacity
 
 
-# Global TPM bucket instance (shared across all nodes)
-# Capacity loaded from env, default 15k for Gemma models
-TPM_CAPACITY = int(os.getenv("TPM_LIMIT", "15000"))
-tpm_bucket = TokenBucket(capacity=TPM_CAPACITY)
+# ============================================
+# DUAL TPM BUCKETS (Gemma vs Gemini)
+# ============================================
+# Gemma models have lower TPM limits (15k)
+GEMMA_TPM_LIMIT = int(os.getenv("GEMMA_TPM_LIMIT", "15000"))
+gemma_bucket = TokenBucket(capacity=GEMMA_TPM_LIMIT)
+
+# Gemini models have higher TPM limits (250k+)
+GEMINI_TPM_LIMIT = int(os.getenv("GEMINI_TPM_LIMIT", "250000"))
+gemini_bucket = TokenBucket(capacity=GEMINI_TPM_LIMIT)
+
+
+def get_token_bucket(model_name: str) -> TokenBucket:
+    """Get the appropriate token bucket for a model.
+    
+    Args:
+        model_name: The model name (e.g., 'gemma-3-27b-it' or 'gemini-2.5-flash-preview-09-2025')
+        
+    Returns:
+        TokenBucket for the model's TPM limit.
+    """
+    if "gemma" in model_name.lower():
+        return gemma_bucket
+    else:
+        return gemini_bucket
+
+
+# Legacy alias for backward compatibility
+tpm_bucket = gemma_bucket  # Default to Gemma bucket
 
 # Get delay mode from environment (default: safe)
 DELAY_MODE = os.getenv("DELAY_MODE", "safe").lower()
