@@ -97,6 +97,10 @@ class GeminiClient:
         if system_prompt and supports_system_instruction:
             config.system_instruction = system_prompt
         
+        # === TPM Full Reset: Wait for bucket to empty before making request ===
+        from utils.rate_limiter import tpm_bucket
+        tpm_bucket.wait_for_full_reset()
+        
         # Retry with exponential backoff
         for attempt in range(self.MAX_RETRIES):
             try:
@@ -105,6 +109,13 @@ class GeminiClient:
                     contents=contents,
                     config=config,
                 )
+                
+                # === TPM: Record token usage from response ===
+                if hasattr(response, "usage_metadata") and response.usage_metadata:
+                    total_tokens = getattr(response.usage_metadata, "total_token_count", 0)
+                    if total_tokens:
+                        tpm_bucket.consume(total_tokens)
+                
                 return response.text
             except Exception as e:
                 if attempt == self.MAX_RETRIES - 1:
