@@ -19,8 +19,12 @@ load_dotenv()
 class GeminiClient:
     """Wrapper for Google Gemini API with retry logic."""
     
-    # Model from .env with fallback default
-    MODEL = os.getenv("GEMINI_MODEL", "gemma-3-27b-it")
+    # Model from .env with fallback defaults
+    # GEMMA_MODEL: High-volume tasks (Pass 1 summaries, Drafter PlantUML)
+    # GEMINI_MODEL: High-complexity tasks (Pass 2 relationships, Architect planning)
+    GEMMA_MODEL = os.getenv("GEMMA_MODEL", "gemma-3-27b-it")
+    GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-preview-09-2025")
+    MODEL = GEMMA_MODEL  # Default to Gemma for backward compatibility
     MAX_RETRIES = 3
     BASE_WAIT = 60 # seconds
     
@@ -45,6 +49,7 @@ class GeminiClient:
         system_prompt: Optional[str] = None,
         file_uris: Optional[list] = None,
         temperature: float = 0.7,
+        model_override: Optional[str] = None,
     ) -> str:
         """Generate content with exponential backoff on failure.
         
@@ -53,12 +58,17 @@ class GeminiClient:
             system_prompt: Optional system instructions.
             file_uris: Optional list of uploaded file URIs for context.
             temperature: Sampling temperature.
+            model_override: Override the default model for this call.
+                           Use GeminiClient.GEMMA_MODEL or GeminiClient.GEMINI_MODEL.
             
         Returns:
             Generated text content.
         """
+        # Use override if provided, else default
+        active_model = model_override or self.MODEL
+        
         # Check if model supports system instruction
-        model_name = self.MODEL.lower()
+        model_name = active_model.lower()
         supports_system_instruction = not any(
             unsupported in model_name 
             for unsupported in self.MODELS_WITHOUT_SYSTEM_INSTRUCTION
@@ -105,7 +115,7 @@ class GeminiClient:
         for attempt in range(self.MAX_RETRIES):
             try:
                 response = self.client.models.generate_content(
-                    model=self.MODEL,
+                    model=active_model,
                     contents=contents,
                     config=config,
                 )

@@ -127,11 +127,13 @@ class DrafterNode(Node):
         knowledge_uri = prep_res.get("knowledge_uri")
         file_uris = [knowledge_uri] if knowledge_uri else []
         
+        # Use Gemma for high-volume PlantUML generation
         response = self.client.generate_content(
             prompt=prompt,
             system_prompt=DRAFTER_SYSTEM_PROMPT,
             file_uris=file_uris,
             temperature=0.4,  # Lower for more consistent output
+            model_override=GeminiClient.GEMMA_MODEL,
         )
         
         # Clean response

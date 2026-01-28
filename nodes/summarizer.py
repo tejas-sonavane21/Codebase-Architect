@@ -242,11 +242,13 @@ Return the COMPLETE updated XML with the new file entries added."""
 
         try:
             # If we have large files, include their URIs for content access
+            # Pass 1: Use Gemma for high-volume batch summarization
             response = self.client.generate_content(
                 prompt=prompt,
                 system_prompt=SUMMARIZER_SYSTEM_PROMPT,
                 file_uris=file_refs if file_refs else None,
                 temperature=0.3,
+                model_override=GeminiClient.GEMMA_MODEL,
             )
             
             # Extract XML from response
@@ -298,10 +300,12 @@ Add <relationships> and <architecture> sections to the XML.
 Return the COMPLETE updated XML."""
 
         try:
+            # Pass 2: Use Gemini for high-complexity relationship detection
             response = self.client.generate_content(
                 prompt=prompt,
                 system_prompt=RELATIONSHIP_SYSTEM_PROMPT,
                 temperature=0.3,
+                model_override=GeminiClient.GEMINI_MODEL,
             )
             
             xml_content = response.strip()

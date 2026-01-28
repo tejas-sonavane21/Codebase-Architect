@@ -125,11 +125,13 @@ Consider:
 
 Propose specific, focused diagrams that would help a developer understand this codebase."""
 
+            # Use Gemini for high-complexity diagram planning
             response = self.client.generate_content(
                 prompt=prompt,
                 system_prompt=ARCHITECT_SYSTEM_PROMPT,
                 file_uris=[prep_res["knowledge_uri"]],  # Single distilled file!
                 temperature=0.5,
+                model_override=GeminiClient.GEMINI_MODEL,
             )
         else:
             # Fallback: use raw file URIs (old behavior)
@@ -145,11 +147,13 @@ Consider:
 
 Propose specific, focused diagrams that would help a developer understand this codebase."""
 
+            # Fallback also uses Gemini for high-complexity reasoning
             response = self.client.generate_content(
                 prompt=prompt,
                 system_prompt=ARCHITECT_SYSTEM_PROMPT,
                 file_uris=prep_res.get("uri_list", []),
                 temperature=0.5,
+                model_override=GeminiClient.GEMINI_MODEL,
             )
         
         # Parse JSON response
