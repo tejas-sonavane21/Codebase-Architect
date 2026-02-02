@@ -12,45 +12,10 @@ from pocketflow import Node
 from utils.gemini_client import GeminiClient
 from utils.rate_limiter import rate_limit_delay
 
+from utils.prompts import get_prompt
 
-ARCHITECT_SYSTEM_PROMPT = """You are a Senior Software Architect specializing in system visualization.
-Your task is to analyze a codebase and propose specific, focused architectural diagrams.
-
-CRITICAL RULES:
-1. DO NOT create "God Diagrams" with more than 15 classes/components
-2. Break large systems into focused sub-modules (e.g., "Auth Module", "Payment Service")
-3. Each diagram should have a clear, specific purpose
-4. Suggest a mix of diagram types:
-   - Class Diagrams: For OOP structures, inheritance, relationships
-   - Sequence Diagrams: For important workflows and API flows
-   - Component Diagrams: For high-level architecture
-   - Entity-Relationship: For data models
-
-Return your response as a JSON object with this structure:
-{
-    "project_summary": "Brief 1-2 sentence project description",
-    "diagrams": [
-        {
-            "id": 1,
-            "name": "Authentication Module Class Diagram",
-            "type": "class",
-            "focus": "Classes related to user authentication, JWT tokens, and session management",
-            "files": ["auth.py", "models/user.py"],
-            "complexity": "medium"
-        },
-        {
-            "id": 2,
-            "name": "Order Processing Sequence",
-            "type": "sequence",
-            "focus": "Flow from order creation through payment to fulfillment",
-            "files": ["orders/service.py", "payments/processor.py"],
-            "complexity": "high"
-        }
-    ]
-}
-
-Suggest 3-8 diagrams depending on project complexity.
-Return ONLY the JSON object, no additional text."""
+# Architect prompt is now managed centrally in utils/prompts.py
+# Use get_prompt("architect", model_name) to get the appropriate prompt
 
 
 class ArchitectNode(Node):
@@ -104,7 +69,8 @@ class ArchitectNode(Node):
         Returns:
             Parsed diagram plan.
         """
-        print("📐 Planning architectural diagrams...")
+        active_model = GeminiClient.GEMINI_MODEL
+        print(f"📐 Planning architectural diagrams with {active_model}...")
         
         if prep_res.get("use_knowledge"):
             # Use the distilled codebase knowledge (efficient - single file)
@@ -126,12 +92,13 @@ Consider:
 Propose specific, focused diagrams that would help a developer understand this codebase."""
 
             # Use Gemini for high-complexity diagram planning
+            # active_model defined at start of exec
             response = self.client.generate_content(
                 prompt=prompt,
-                system_prompt=ARCHITECT_SYSTEM_PROMPT,
+                system_prompt=get_prompt("architect", active_model),
                 file_uris=[prep_res["knowledge_uri"]],  # Single distilled file!
                 temperature=0.5,
-                model_override=GeminiClient.GEMINI_MODEL,
+                model_override=active_model,
             )
         else:
             # Fallback: use raw file URIs (old behavior)
@@ -148,12 +115,13 @@ Consider:
 Propose specific, focused diagrams that would help a developer understand this codebase."""
 
             # Fallback also uses Gemini for high-complexity reasoning
+            active_model = GeminiClient.GEMINI_MODEL
             response = self.client.generate_content(
                 prompt=prompt,
-                system_prompt=ARCHITECT_SYSTEM_PROMPT,
+                system_prompt=get_prompt("architect", active_model),
                 file_uris=prep_res.get("uri_list", []),
                 temperature=0.5,
-                model_override=GeminiClient.GEMINI_MODEL,
+                model_override=active_model,
             )
         
         # Parse JSON response

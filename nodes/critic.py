@@ -16,7 +16,7 @@ from utils.kroki_client import KrokiClient
 class CriticNode(Node):
     """Critic node that validates and renders diagrams."""
     
-    MAX_RETRIES = 3
+    MAX_RETRIES = 10
     
     def __init__(self, max_retries: int = 1, wait: int = 0):
         super().__init__(max_retries=max_retries, wait=wait)

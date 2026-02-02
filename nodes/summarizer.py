@@ -21,60 +21,10 @@ SMALL_FILE_THRESHOLD = 50  # lines
 # Batch configuration
 BATCH_SIZE = 2  # files per batch (excluding summary)
 
-# System prompts for summarization
-SUMMARIZER_SYSTEM_PROMPT = """You are a code analysis expert. Your task is to analyze source code files and produce structured XML summaries.
+from utils.prompts import get_prompt
 
-For each file, extract:
-- Purpose: What the file does in 1-2 sentences
-- Key classes/components with brief descriptions
-- Important functions with their purpose
-- Dependencies (imports) and what imports this file
-
-You will receive the current codebase knowledge XML (may be empty initially) and 1-2 new files to analyze.
-Your job is to UPDATE the XML by adding summaries for the new files.
-
-CRITICAL RULES:
-1. PRESERVE all existing content in the XML - only ADD new file entries
-2. If a file is marked as "full_content" type, keep it as-is
-3. For files over 50 lines, create a semantic summary (not full code)
-4. Be concise but comprehensive
-5. Return ONLY valid XML, no extra text
-
-XML Format:
-```xml
-<codebase_knowledge project="ProjectName">
-  <overview>Brief project description</overview>
-  <files>
-    <file path="relative/path.py" type="summary" loc="150">
-      <purpose>What this file does</purpose>
-      <key_components>
-        <class name="ClassName">Brief description</class>
-        <function name="func_name">What it does</function>
-      </key_components>
-      <dependencies>
-        <imports>module1, module2</imports>
-      </dependencies>
-    </file>
-    <file path="small/file.py" type="full_content" loc="30">
-      <content><![CDATA[
-        # Full source code here
-      ]]></content>
-    </file>
-  </files>
-</codebase_knowledge>
-```"""
-
-RELATIONSHIP_SYSTEM_PROMPT = """You are analyzing a codebase knowledge XML to identify cross-file relationships and architectural patterns.
-
-Given the codebase_knowledge.xml, identify:
-1. Import relationships (which files import which)
-2. Inheritance relationships (class extends class)
-3. Composition relationships (class uses class)
-4. Architectural patterns used (MVC, Repository, Factory, etc.)
-
-UPDATE the XML by adding a <relationships> and <architecture> section.
-
-Return ONLY the complete, valid XML with the new sections added."""
+# Summarizer prompts are now managed centrally in utils/prompts.py
+# Use get_prompt("summarizer_pass1", model) or get_prompt("summarizer_pass2", model)
 
 
 class SummarizerNode(Node):
@@ -243,12 +193,13 @@ Return the COMPLETE updated XML with the new file entries added."""
         try:
             # If we have large files, include their URIs for content access
             # Pass 1: Use Gemma for high-volume batch summarization
+            active_model = GeminiClient.GEMMA_MODEL
             response = self.client.generate_content(
                 prompt=prompt,
-                system_prompt=SUMMARIZER_SYSTEM_PROMPT,
+                system_prompt=get_prompt("summarizer_pass1", active_model),
                 file_uris=file_refs if file_refs else None,
                 temperature=0.3,
-                model_override=GeminiClient.GEMMA_MODEL,
+                model_override=active_model,
             )
             
             # Extract XML from response
@@ -301,11 +252,12 @@ Return the COMPLETE updated XML."""
 
         try:
             # Pass 2: Use Gemini for high-complexity relationship detection
+            active_model = GeminiClient.GEMINI_MODEL
             response = self.client.generate_content(
                 prompt=prompt,
-                system_prompt=RELATIONSHIP_SYSTEM_PROMPT,
+                system_prompt=get_prompt("summarizer_pass2", active_model),
                 temperature=0.3,
-                model_override=GeminiClient.GEMINI_MODEL,
+                model_override=active_model,
             )
             
             xml_content = response.strip()
@@ -342,7 +294,7 @@ Return the COMPLETE updated XML."""
         self.knowledge_xml = self._build_initial_xml(self.project_name, analysis)
         
         # ===== PASS 1: Build per-file summaries =====
-        print(f"   📝 Pass 1: Building file summaries...")
+        print(f"   📝 Pass 1: Building file summaries (Model: {GeminiClient.GEMMA_MODEL})...")
         
         total_batches = (len(sorted_files) + BATCH_SIZE - 1) // BATCH_SIZE
         processed = 0
@@ -372,7 +324,7 @@ Return the COMPLETE updated XML."""
         print(f"   ✓ Pass 1 complete: {processed} files processed, {failed} failed")
         
         # ===== PASS 2: Identify relationships =====
-        print(f"   🔗 Pass 2: Detecting cross-file relationships...")
+        print(f"   🔗 Pass 2: Detecting cross-file relationships (Model: {GeminiClient.GEMINI_MODEL})...")
         
         self.knowledge_xml = self._add_relationships(self.knowledge_xml)
         

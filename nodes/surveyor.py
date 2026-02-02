@@ -12,47 +12,10 @@ from pocketflow import Node
 from utils.gemini_client import GeminiClient
 from utils.rate_limiter import rate_limit_delay
 
+from utils.prompts import get_prompt
 
-SURVEYOR_SYSTEM_PROMPT = """You are a Technical Lead selecting files for architectural analysis.
-Your task is to identify source files needed to understand the system architecture.
-
-INCLUDE RULES:
-1. Source code: .py, .js, .ts, .java, .go, .rs, .jsx, .tsx, .vue, .svelte
-2. Configuration: package.json, pyproject.toml, Dockerfile, docker-compose.yml, settings files
-3. Core logic: models, views, controllers, services, routes, middleware, utils
-4. Entry points: main.py, app.py, index.js, manage.py
-
-EXCLUDE RULES:
-5. Binary files: ALL files with "type": "binary" in file_inventory.json
-6. Generated/cached: node_modules, dist, build, .git, __pycache__, venv, migrations
-7. Tests: test files unless critical to architecture
-8. Docs: .md, .txt files (except README if it contains architecture info)
-9. Lock files: package-lock.json, poetry.lock, yarn.lock
-
-CRITICAL RULES:
-10. MUTUAL EXCLUSIVITY: A file path CANNOT appear in both include_paths AND exclude_patterns. Choose one.
-11. NO DUPLICATES: If you exclude a file, do NOT also include it. If you include it, do NOT also exclude it.
-12. SMART SELECTION: When similar files exist (e.g., index.html and old_index.html), include ONLY the current version:
-    - SKIP files with prefixes: old_, backup_, deprecated_, _old, _backup, _bak
-    - SKIP files with suffixes: .bak, .backup, .old, _copy
-    - INCLUDE: The non-prefixed, non-suffixed current version
-13. TEMPLATES: For web frameworks (Django, Flask, Rails, React):
-    - INCLUDE: Only key structural templates (base, layout, index, main)
-    - EXCLUDE: All other HTML templates (they follow the same patterns)
-14. STATIC FILES: Exclude CSS/JS unless they contain significant business logic
-
-Return your response as a JSON object with this exact structure:
-{
-    "analysis": "Brief 1-2 sentence summary of the project type",
-    "include_paths": ["path/to/file1", "path/to/file2"],
-    "exclude_patterns": ["pattern1", "pattern2"],
-    "estimated_file_count": 42
-}
-
-FINAL CHECK: Before returning, verify NO file appears in both lists.
-
-Return ONLY the JSON object, no additional text."""
-
+# Surveyor prompt is now managed centrally in utils/prompts.py
+# Use get_prompt("surveyor", model_name) to get the appropriate prompt
 
 class SurveyorNode(Node):
     """Surveyor node that selects relevant files using LLM analysis."""
@@ -88,7 +51,8 @@ class SurveyorNode(Node):
         Returns:
             Parsed upload configuration.
         """
-        print("🔬 Analyzing project structure with Gemini...")
+        active_model = GeminiClient.GEMINI_MODEL
+        print(f"🔬 Analyzing project structure with {active_model}...")
         
         base_prompt = f"""Analyze this project structure and identify ALL the important source files that are needed to understand the architecture:
 
@@ -118,10 +82,13 @@ CRITICAL: Return ONLY a valid JSON object. No markdown code blocks, no explanato
 Example format:
 {{"analysis": "...", "include_paths": ["file1.py", "file2.js"], "exclude_patterns": ["*.log"], "estimated_file_count": 10}}"""
             
+            # Use Gemma for file selection (high volume, structured task)
+            # active_model defined at start of exec
             response = self.client.generate_content(
                 prompt=prompt,
-                system_prompt=SURVEYOR_SYSTEM_PROMPT,
-                temperature=0.3,  # Lower temperature for more consistent JSON
+                system_prompt=get_prompt("surveyor", active_model),
+                temperature=0.3,
+                model_override=active_model,
             )
             
             # Parse JSON response

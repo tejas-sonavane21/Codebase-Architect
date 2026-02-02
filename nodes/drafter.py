@@ -11,22 +11,10 @@ from pocketflow import Node
 from utils.gemini_client import GeminiClient
 from utils.rate_limiter import rate_limit_delay
 
+from utils.prompts import get_prompt
 
-DRAFTER_SYSTEM_PROMPT = """You are a Strict PlantUML Generator.
-You do NOT speak English.
-Return ONLY valid PlantUML code wrapped in @startuml and @enduml tags.
-
-RULES:
-1. Start with @startuml
-2. End with @enduml
-3. Use accurate class names and method signatures from the uploaded code
-4. Keep diagrams focused - max 15 classes/components
-5. Use proper PlantUML syntax
-6. Add meaningful relationships and cardinalities
-7. Include brief notes for complex parts
-
-Do NOT include any explanatory text before or after the PlantUML code.
-Return ONLY the PlantUML code."""
+# Drafter prompt is now managed centrally in utils/prompts.py
+# Use get_prompt("drafter", model_name) to get the appropriate prompt
 
 
 class DrafterNode(Node):
@@ -95,10 +83,12 @@ class DrafterNode(Node):
         diagram_type = diagram["type"]
         focus = diagram["focus"]
         
+        active_model = GeminiClient.GEMMA_MODEL
+        
         if retry_count > 0:
-            print(f"🔄 Retry {retry_count}/{self.MAX_RETRIES} for: {diagram_name}")
+            print(f"🔄 Retry {retry_count}/{self.MAX_RETRIES} for: {diagram_name} (Model: {active_model})")
         else:
-            print(f"✏️  Drafting: {diagram_name}")
+            print(f"✏️  Drafting: {diagram_name} (Model: {active_model})")
         
         # Build prompt
         prompt_parts = [
@@ -128,12 +118,14 @@ class DrafterNode(Node):
         file_uris = [knowledge_uri] if knowledge_uri else []
         
         # Use Gemma for high-volume PlantUML generation
+        # Use Gemma for high-volume PlantUML generation
+        # active_model defined at start
         response = self.client.generate_content(
             prompt=prompt,
-            system_prompt=DRAFTER_SYSTEM_PROMPT,
+            system_prompt=get_prompt("drafter", active_model),
             file_uris=file_uris,
             temperature=0.4,  # Lower for more consistent output
-            model_override=GeminiClient.GEMMA_MODEL,
+            model_override=active_model,
         )
         
         # Clean response
