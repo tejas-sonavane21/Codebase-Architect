@@ -26,6 +26,13 @@ sys.path.insert(0, str(Path(__file__).parent))
 from dotenv import load_dotenv
 
 
+def normalize_repo_url(url: str) -> str:
+    """Normalize a GitHub URL by removing trailing .git if present."""
+    if url and url.endswith(".git"):
+        return url[:-4]  # Remove the ".git" suffix
+    return url
+
+
 def validate_repo_url(url: str) -> bool:
     """Validate that the URL looks like a GitHub repo URL."""
     if not url:
@@ -86,7 +93,7 @@ The tool will:
     
     parser.add_argument(
         "repo_url",
-        help="GitHub repository URL (e.g., https://github.com/user/repo)"
+        help="GitHub repository URL (e.g., https://github.com/user/repo or https://github.com/user/repo.git)"
     )
     
     parser.add_argument(
@@ -103,8 +110,11 @@ The tool will:
     
     args = parser.parse_args()
     
+    # Normalize URL (strip .git suffix if present)
+    repo_url = normalize_repo_url(args.repo_url)
+    
     # Validate inputs
-    if not validate_repo_url(args.repo_url):
+    if not validate_repo_url(repo_url):
         print(f"✗ Error: Invalid GitHub URL: {args.repo_url}")
         print("  Expected format: https://github.com/user/repo")
         sys.exit(1)
@@ -122,7 +132,7 @@ The tool will:
         from flow import run_flow
         
         result = run_flow(
-            repo_url=args.repo_url,
+            repo_url=repo_url,
             output_dir=output_dir,
         )
         
