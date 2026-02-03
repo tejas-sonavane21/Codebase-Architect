@@ -10,8 +10,10 @@ from pocketflow import Node
 
 from utils.gemini_client import GeminiClient
 from utils.rate_limiter import rate_limit_delay
+from nodes.critic import CriticNode  # For MAX_RETRIES reference
 
 from utils.prompts import get_prompt
+from utils.diagram_rules import get_diagram_rules
 
 # Drafter prompt is now managed centrally in utils/prompts.py
 # Use get_prompt("drafter", model_name) to get the appropriate prompt
@@ -19,8 +21,6 @@ from utils.prompts import get_prompt
 
 class DrafterNode(Node):
     """Drafter node that generates PlantUML code using LLM."""
-    
-    MAX_RETRIES = 3  # For self-correction loop
     
     def __init__(self, max_retries: int = 3, wait: int = 2):
         super().__init__(max_retries=max_retries, wait=wait)
@@ -42,23 +42,17 @@ class DrafterNode(Node):
             return {"done": True}
         
         current_diagram = queue[current_idx]
-        error_context = shared.get("critic_error", None)
         retry_count = shared.get("retry_count", 0)
         
         # Use knowledge_uri (distilled XML) instead of uri_list (raw files)
         # This prevents 500 Internal Errors from too many file references
         knowledge_uri = shared.get("knowledge_uri")  # {uri, mime_type}
         
-        # Clear error after reading
-        if error_context:
-            shared["critic_error"] = None
-        
         self.client = GeminiClient()
         
         return {
             "done": False,
             "diagram": current_diagram,
-            "error_context": error_context,
             "retry_count": retry_count,
             "knowledge_uri": knowledge_uri,
         }
@@ -76,7 +70,6 @@ class DrafterNode(Node):
             return ""
         
         diagram = prep_res["diagram"]
-        error_context = prep_res.get("error_context")
         retry_count = prep_res.get("retry_count", 0)
         
         diagram_name = diagram["name"]
@@ -86,7 +79,7 @@ class DrafterNode(Node):
         active_model = GeminiClient.GEMMA_MODEL
         
         if retry_count > 0:
-            print(f"🔄 Retry {retry_count}/{self.MAX_RETRIES} for: {diagram_name} (Model: {active_model})")
+            print(f"🔄 Retry {retry_count}/{CriticNode.MAX_RETRIES} for: {diagram_name} (Model: {active_model})")
         else:
             print(f"✏️  Drafting: {diagram_name} (Model: {active_model})")
         
@@ -101,15 +94,9 @@ class DrafterNode(Node):
         if diagram.get("files"):
             prompt_parts.append(f"Relevant Files: {', '.join(diagram['files'])}")
         
-        # Add error context if retrying
-        if error_context:
-            prompt_parts.extend([
-                "",
-                "PREVIOUS ATTEMPT FAILED. Fix these errors:",
-                error_context,
-                "",
-                "Generate corrected PlantUML code.",
-            ])
+        # On retry, we simply regenerate fresh without error context.
+        # Gemma (27b) struggles with code comparison, so a fresh attempt is more effective.
+        # The improved prompts with WRONG/RIGHT examples should guide it correctly.
         
         prompt = "\n".join(prompt_parts)
         
@@ -118,11 +105,14 @@ class DrafterNode(Node):
         file_uris = [knowledge_uri] if knowledge_uri else []
         
         # Use Gemma for high-volume PlantUML generation
-        # Use Gemma for high-volume PlantUML generation
-        # active_model defined at start
+        # Combine base drafter prompt with diagram-type-specific rules
+        base_prompt = get_prompt("drafter", active_model)
+        diagram_rules = get_diagram_rules(diagram_type)
+        system_prompt = f"{base_prompt}\n\n{diagram_rules}" if diagram_rules else base_prompt
+        
         response = self.client.generate_content(
             prompt=prompt,
-            system_prompt=get_prompt("drafter", active_model),
+            system_prompt=system_prompt,
             file_uris=file_uris,
             temperature=0.4,  # Lower for more consistent output
             model_override=active_model,

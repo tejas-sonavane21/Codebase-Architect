@@ -409,6 +409,11 @@ Return ONLY the PlantUML code.""",
         "low_param": """You are a Professional PlantUML Code Generator.
 Generate PRECISE, CLEAN, and PRODUCTION-READY PlantUML diagrams.
 
+=== ZERO-TOLERANCE COMPLIANCE ===
+CRITICAL: Every rule below is MANDATORY. You are allowed to be creative with diagram design, 
+but IGNORING ANY RULE IS NOT AN OPTION. Every line in this prompt describes a critical requirement.
+If you violate a rule, the diagram WILL FAIL validation. Follow ALL rules with absolute precision.
+
 === UNIVERSAL RULES ===
 1. FORMAT: Start with `@startuml` then `!theme blueprint`. End with `@enduml`.
 2. NAMES: Use EXACT names from the codebase. NO placeholders, NO generic names.
@@ -422,55 +427,7 @@ Generate PRECISE, CLEAN, and PRODUCTION-READY PlantUML diagrams.
    - Class/Component: `A --> B : uses` or `A ..> B : creates`
 3. SPECIFICITY: Labels should describe WHAT happens, not just exist.
 
-=== CLASS DIAGRAM RULES ===
-1. VISIBILITY: `+` public, `#` protected, `-` private.
-2. TYPES: Include return types and parameter types when available.
-3. ABSTRACT: Mark abstract classes/methods with `{abstract}`.
-4. INHERITANCE: Use EITHER `class Child extends Parent` OR `Parent <|-- Child`. Never both.
-5. COMPLETENESS: If showing a hierarchy, include ALL classes that extend the base, not a subset.
-6. NOTES: Add `note` blocks to explain complex logic or design patterns.
-
-=== COMPONENT DIAGRAM RULES ===
-1. STRUCTURE: Use `component "Name" as Alias`. Do NOT put text descriptions inside component boxes.
-2. GROUPING: Use `package "ModuleName" { ... }` to group logically related components.
-3. SIMPLICITY: Hide internal details. Use `note` blocks for descriptions, not inline text.
-4. LABELS: All arrows must have SPECIFIC labels (method names, data types), not generic "uses" or "fetches data".
-5. EXTERNAL SYSTEMS: For external APIs/services, use simple component names without internal structure.
-
-=== SEQUENCE DIAGRAM RULES ===
-1. ACTOR REQUIRED: Every sequence diagram MUST start with an `actor "User"` or equivalent initiator.
-2. PARTICIPANTS: Use actual class names from user code. `participant "ClassName" as Alias`.
-3. LIBRARY EXCLUSION: Do NOT create participants for standard library modules (`argparse`, `asyncio`, `os`, `sys`, `json`, `logging`, `re`, `time`) OR third-party libraries (`aiohttp`, `requests`, `BeautifulSoup`, `bs4`, `httpx`). These are implementation details, not architecture.
-4. ARROWS: Label every arrow with the method call or action: `A -> B : search(query)`.
-5. CONTROL FLOW:
-   - `alt/else/end` for conditionals.
-   - `loop/end` for iterations.
-   - `par/end par` for concurrent execution.
-6. VISUAL POLISH: Use activation colors to distinguish phases: `activate VS #LightBlue`, `activate VS #LightGreen`.
-7. COMPLETENESS: If the diagram involves N similar components, show ALL of them, not just one representative.
-8. NOTES: Annotate important steps with `note right` explaining the logic.
-9. ONE WORKFLOW: Show only ONE class/component's workflow per diagram. Do NOT merge unrelated workflows.
-
-=== ACTIVITY DIAGRAM RULES ===
-1. START/END: Use `start` and `stop` keywords.
-2. ACTIONS: Use `:Action description;` syntax.
-3. DECISIONS: Use `if (condition?) then (yes)` / `else (no)` / `endif`.
-4. ANNOTATIONS: Add `note right` after decision branches to explain WHAT each branch does and WHY.
-5. PARALLEL: Use `fork` and `end fork` for concurrent activities.
-6. SWIMLANES: Use `|Swimlane|` to separate responsibilities.
-7. SPECIFICITY: Inside actions, mention specific methods, retry counts, delay values when known.
-
-=== STATE DIAGRAM RULES ===
-1. STATES: Use `state "StateName" as Alias`.
-2. TRANSITIONS: Label with trigger/condition: `State1 --> State2 : event`.
-3. INITIAL/FINAL: Use `[*] --> FirstState` and `LastState --> [*]`.
-4. NESTED: Use `state ParentState { ... }` for composite states.
-
-=== USE CASE DIAGRAM RULES ===
-1. ACTORS: Use `actor "ActorName" as Alias`.
-2. USE CASES: Use `usecase "Action" as UC1`.
-3. RELATIONSHIPS: `Actor --> UseCase` for associations.
-4. BOUNDARIES: Use `rectangle "System" { ... }` to define system scope.""",   # Will be populated in Step 6
+REMEMBER: Diagram-type-specific rules will follow. They are EQUALLY MANDATORY.""",   # Will be populated in Step 6
     },
 }
 

@@ -16,7 +16,8 @@ from utils.kroki_client import KrokiClient
 class CriticNode(Node):
     """Critic node that validates and renders diagrams."""
     
-    MAX_RETRIES = 10
+    MAX_RETRIES = 5
+    DEBUG_FAILED_DIAGRAMS = os.getenv("DEBUG_FAILED_DIAGRAMS", "true").lower() == "true"
     
     def __init__(self, max_retries: int = 1, wait: int = 0):
         super().__init__(max_retries=max_retries, wait=wait)
@@ -82,6 +83,8 @@ class CriticNode(Node):
         
         if not success:
             print(f"   ✗ Render failed: {render_error}")
+            # Save failed attempt for debugging
+            self._save_failed_attempt(output_dir, safe_name, retry_count, plantuml, render_error)
             return {
                 "success": False,
                 "error": f"Kroki rendering failed: {render_error}",
@@ -119,6 +122,25 @@ class CriticNode(Node):
         safe = safe.replace(" ", "_")
         safe = "".join(c for c in safe if c.isalnum() or c in "_-")
         return safe[:50]  # Limit length
+    
+    def _save_failed_attempt(self, output_dir: str, diagram_name: str, retry_count: int, plantuml: str, error: str):
+        """Save failed PlantUML attempt for debugging analysis."""
+        if not self.DEBUG_FAILED_DIAGRAMS:
+            return
+        
+        # Create debug directory
+        debug_dir = os.path.join(output_dir, "_debug_failed")
+        os.makedirs(debug_dir, exist_ok=True)
+        
+        # Save failed PlantUML with attempt number
+        failed_file = os.path.join(debug_dir, f"{diagram_name}_attempt_{retry_count + 1}.puml")
+        with open(failed_file, "w", encoding="utf-8") as f:
+            f.write(f"@rem Error: {error}\n")
+            f.write(f"@rem Attempt: {retry_count + 1}/{self.MAX_RETRIES}\n")
+            f.write(f"@rem ========================================\n\n")
+            f.write(plantuml)
+        
+        print(f"   📝 Saved failed attempt to: {failed_file}")
     
     def post(self, shared: dict, prep_res: dict, exec_res: dict) -> str:
         """Handle result and determine next action.
