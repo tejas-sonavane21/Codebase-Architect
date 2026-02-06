@@ -8,15 +8,14 @@ using Gemini with code context.
 from typing import Optional
 from pocketflow import Node
 
-from utils.gemini_client import GeminiClient
-from utils.rate_limiter import rate_limit_delay
-from nodes.critic import CriticNode  # For MAX_RETRIES reference
-
-from utils.prompts import get_prompt
+from utils.gemini_client import get_client
+from utils.prompts import get_prompt, get_gem_id
 from utils.diagram_rules import get_diagram_rules
+from utils.gem_manager import update_gem
+from utils.output_cleaner import clean_plantuml
 
-# Drafter prompt is now managed centrally in utils/prompts.py
-# Use get_prompt("drafter", model_name) to get the appropriate prompt
+
+MAX_RETRIES = 3  # Maximum retries per diagram
 
 
 class DrafterNode(Node):
@@ -27,14 +26,7 @@ class DrafterNode(Node):
         self.client: Optional[GeminiClient] = None
     
     def prep(self, shared: dict) -> dict:
-        """Get current diagram from queue.
-        
-        Args:
-            shared: Shared store with diagram queue.
-            
-        Returns:
-            Dict with current diagram info and any error context.
-        """
+        """Get current diagram from queue."""
         queue = shared.get("diagram_queue", [])
         current_idx = shared.get("current_diagram_index", 0)
         
@@ -43,12 +35,9 @@ class DrafterNode(Node):
         
         current_diagram = queue[current_idx]
         retry_count = shared.get("retry_count", 0)
+        knowledge_uri = shared.get("knowledge_uri")
         
-        # Use knowledge_uri (distilled XML) instead of uri_list (raw files)
-        # This prevents 500 Internal Errors from too many file references
-        knowledge_uri = shared.get("knowledge_uri")  # {uri, mime_type}
-        
-        self.client = GeminiClient()
+        self.client = get_client()
         
         return {
             "done": False,
@@ -58,14 +47,7 @@ class DrafterNode(Node):
         }
     
     def exec(self, prep_res: dict) -> str:
-        """Generate PlantUML code.
-        
-        Args:
-            prep_res: Context with diagram info and optional error.
-            
-        Returns:
-            PlantUML code string.
-        """
+        """Generate PlantUML code."""
         if prep_res.get("done"):
             return ""
         
@@ -75,15 +57,53 @@ class DrafterNode(Node):
         diagram_name = diagram["name"]
         diagram_type = diagram["type"]
         focus = diagram["focus"]
+        complexity = diagram.get("complexity", "unknown")
         
-        active_model = GeminiClient.GEMMA_MODEL
+        active_model = self.client.MODEL
         
         if retry_count > 0:
-            print(f"🔄 Retry {retry_count}/{CriticNode.MAX_RETRIES} for: {diagram_name} (Model: {active_model})")
+            print(f"🔄 Retry {retry_count}/{MAX_RETRIES} for: {diagram_name} (Model: {active_model})")
         else:
-            print(f"✏️  Drafting: {diagram_name} (Model: {active_model})")
+            print(f"✏️  Drafting: {diagram_name} [{complexity}] (Model: {active_model})")
         
-        # Build prompt
+        # ---------------------------------------------------------
+        # Dynamic Gem Update (only if diagram type changed)
+        # ---------------------------------------------------------
+        gem_id = get_gem_id("drafter")
+        
+        if gem_id:
+            # Check if we need to update the gem rules
+            last_type = self.client.__dict__.get("_last_drafter_type")
+            
+            if last_type != diagram_type:
+                print(f"   ⚙ Updating 'drafter' gem rules for: {diagram_type}...")
+                
+                # Get base prompt and specific rules
+                base_prompt = get_prompt("drafter", active_model)
+                specific_rules = get_diagram_rules(diagram_type)
+                
+                # Combine them
+                full_system_prompt = f"{base_prompt}\n\n{specific_rules}"
+                if retry_count > 0:
+                     full_system_prompt += f"\n\nIMPORTANT: This is a RETRY. The previous attempt failed validation. Pay extra attention to syntax rules."
+                
+                # Update the gem
+                success = update_gem(
+                    self.client, 
+                    "drafter", 
+                    name=f"Drafter ({diagram_type})", 
+                    prompt=full_system_prompt,
+                    description=f"PlantUML {diagram_type} diagram generator with strict syntax rules"
+                )
+                
+                if success:
+                    self.client.__dict__["_last_drafter_type"] = diagram_type
+        
+        # ---------------------------------------------------------
+        # Prompt Construction
+        # ---------------------------------------------------------
+        
+        # Build user prompt with diagram context
         prompt_parts = [
             f"Generate a {diagram_type.upper()} diagram in PlantUML format.",
             f"",
@@ -94,92 +114,39 @@ class DrafterNode(Node):
         if diagram.get("files"):
             prompt_parts.append(f"Relevant Files: {', '.join(diagram['files'])}")
         
-        # On retry, we simply regenerate fresh without error context.
-        # Gemma (27b) struggles with code comparison, so a fresh attempt is more effective.
-        # The improved prompts with WRONG/RIGHT examples should guide it correctly.
-        
         prompt = "\n".join(prompt_parts)
         
-        # Generate with knowledge context (single distilled file, not 15+ raw files)
+        # Get knowledge context
         knowledge_uri = prep_res.get("knowledge_uri")
         file_uris = [knowledge_uri] if knowledge_uri else []
         
-        # Use Gemma for high-volume PlantUML generation
-        # Combine base drafter prompt with diagram-type-specific rules
-        base_prompt = get_prompt("drafter", active_model)
-        diagram_rules = get_diagram_rules(diagram_type)
-        system_prompt = f"{base_prompt}\n\n{diagram_rules}" if diagram_rules else base_prompt
+        # If no gem, pass FULL prompt inline (base + rules)
+        system_prompt = None
+        if not gem_id:
+            base_prompt = get_prompt("drafter", active_model)
+            specific_rules = get_diagram_rules(diagram_type)
+            system_prompt = f"{base_prompt}\n\n{specific_rules}"
         
         response = self.client.generate_content(
             prompt=prompt,
             system_prompt=system_prompt,
             file_uris=file_uris,
-            temperature=0.4,  # Lower for more consistent output
+            temperature=0.4,
             model_override=active_model,
+            gem_id=gem_id,
         )
         
-        # Clean response
-        code = self._clean_plantuml(response)
-        
+        code = clean_plantuml(response)
         print(f"   ✓ Generated {len(code.split(chr(10)))} lines of PlantUML")
         
         return code
     
-    def _clean_plantuml(self, response: str) -> str:
-        """Extract and clean PlantUML code from response."""
-        text = response.strip()
-        
-        # Remove markdown code blocks if present
-        if text.startswith("```"):
-            lines = text.split("\n")
-            # Find start and end of code block
-            start_idx = 1
-            end_idx = len(lines) - 1
-            
-            # Skip language identifier
-            if lines[0].startswith("```"):
-                start_idx = 1
-            
-            # Find closing ```
-            for i in range(len(lines) - 1, 0, -1):
-                if lines[i].strip() == "```":
-                    end_idx = i
-                    break
-            
-            text = "\n".join(lines[start_idx:end_idx])
-        
-        # Ensure proper tags
-        if "@startuml" not in text:
-            text = "@startuml\n" + text
-        if "@enduml" not in text:
-            text = text + "\n@enduml"
-        
-        return text.strip()
-    
     def post(self, shared: dict, prep_res: dict, exec_res: str) -> str:
-        """Store generated code and proceed to critic.
-        
-        Args:
-            shared: Shared store.
-            prep_res: Prep result.
-            exec_res: PlantUML code.
-            
-        Returns:
-            Action string for flow.
-        """
+        """Store generated code and proceed to critic."""
         if prep_res.get("done"):
             return "complete"
         
         shared["current_plantuml"] = exec_res
         shared["current_diagram_info"] = prep_res["diagram"]
-        
-        # Rate limit delay after diagram generation
-        retry_count = prep_res.get("retry_count", 0)
-        if retry_count > 0:
-            # This was a retry, use shorter error cooldown
-            rate_limit_delay("on_error")
-        else:
-            # Normal diagram generation
-            rate_limit_delay("drafter_per_diagram")
         
         return "validate"

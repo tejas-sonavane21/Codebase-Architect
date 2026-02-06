@@ -1,390 +1,291 @@
 """
-Gemini API Client Wrapper
+Gemini Client - gemini_webapi Wrapper (Singleton)
 
-Handles Gemini 2.5 Flash interactions with exponential backoff
-and Files API for code context uploads.
+Primary client for all LLM interactions using the gemini_webapi library.
+Uses browser cookies for authentication and Gemini Gems for system prompts.
+
+This module implements a singleton pattern to avoid:
+- Multiple client initializations
+- Multiple auto_refresh tasks
+- Resource waste
 """
 
 import os
 import time
-from typing import Optional
+import asyncio
+from pathlib import Path
+from typing import Optional, List
 from dotenv import load_dotenv
-from google import genai
-from google.genai import types
 
 # Load environment variables
 load_dotenv()
 
 
+# Module-level singleton instance
+_client_instance: Optional["GeminiClient"] = None
+
+
+def get_client() -> "GeminiClient":
+    """
+    Get the singleton GeminiClient instance.
+    
+    Creates the client on first call, returns existing instance on subsequent calls.
+    """
+    global _client_instance
+    if _client_instance is None:
+        _client_instance = GeminiClient()
+    return _client_instance
+
+
 class GeminiClient:
-    """Wrapper for Google Gemini API with retry logic."""
+    """Gemini client using gemini_webapi library (Singleton)."""
     
-    # Model from .env with fallback defaults
-    # GEMMA_MODEL: High-volume tasks (Pass 1 summaries, Drafter PlantUML)
-    # GEMINI_MODEL: High-complexity tasks (Pass 2 relationships, Architect planning)
-    GEMMA_MODEL = os.getenv("GEMMA_MODEL", "gemma-3-27b-it")
-    GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-preview-09-2025")
-    MODEL = GEMMA_MODEL  # Default to Gemma for backward compatibility
+    # Single model for all operations
+    MODEL = os.getenv("GEMINI_WEB_MODEL", "gemini-3.0-pro")
+    
+    # Request timing
+    SAFETY_DELAY = 2  # seconds between requests
     MAX_RETRIES = 3
-    BASE_WAIT = 60 # seconds
+    BASE_WAIT = 10  # seconds for retry backoff
     
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self):
         """Initialize the Gemini client.
         
-        Args:
-            api_key: Gemini API key. If None, reads from GEMINI_API_KEY env var.
-        """
-        self.api_key = api_key or os.getenv("GEMINI_API_KEY")
-        if not self.api_key:
-            raise ValueError("GEMINI_API_KEY not found. Set it in .env or pass directly.")
+        Reads cookies from environment variables:
+        - GEMINI_SECURE_1PSID
+        - GEMINI_SECURE_1PSIDTS
         
-        self.client = genai.Client(api_key=self.api_key)
+        Note: Use get_client() to get the singleton instance instead of
+        instantiating this class directly.
+        """
+        self._client = None
+        self._loop = None
+        self._last_request_time = 0
+        self._initialized = False
+        
+        # Get cookies from environment
+        self._secure_1psid = os.getenv("GEMINI_SECURE_1PSID")
+        self._secure_1psidts = os.getenv("GEMINI_SECURE_1PSIDTS")
+        
+        if not self._secure_1psid:
+            raise ValueError("GEMINI_SECURE_1PSID environment variable required")
     
-    # Models that don't support system_instruction (Developer Instruction)
-    MODELS_WITHOUT_SYSTEM_INSTRUCTION = {"gemma-3-1b-it", "gemma-3-4b-it", "gemma-3-12b-it", "gemma-3-27b-it"}
+    async def _ensure_initialized(self):
+        """Initialize the gemini_webapi client lazily."""
+        if self._initialized:
+            return
+        
+        from gemini_webapi import GeminiClient as WebClient
+        
+        print("🌐 Initializing Gemini client...")
+        
+        # Correct initialization pattern:
+        # 1. Create client with cookies
+        # 2. Call init() to complete setup
+        self._client = WebClient(
+            self._secure_1psid,
+            self._secure_1psidts,
+            proxy=None
+        )
+        await self._client.init(
+            timeout=120,  # Increased from 30s for longer API calls
+            auto_close=False,
+            auto_refresh=True
+        )
+        
+        self._initialized = True
+        print("✓ Gemini client initialized")
     
-    def generate_content(
+    def _apply_safety_delay(self):
+        """Apply safety delay between requests."""
+        if self._last_request_time > 0:
+            elapsed = time.time() - self._last_request_time
+            if elapsed < self.SAFETY_DELAY:
+                wait_time = self.SAFETY_DELAY - elapsed
+                print(f"   ⏳ Safety delay: {wait_time:.1f}s...")
+                time.sleep(wait_time)
+    
+    def _get_or_create_loop(self):
+        """Get or create a persistent event loop."""
+        try:
+            # Try to get existing loop
+            loop = asyncio.get_event_loop()
+            if loop.is_closed():
+                raise RuntimeError("Loop is closed")
+            return loop
+        except RuntimeError:
+            # Create new loop
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            return loop
+    
+    async def _generate_content_async(
         self,
         prompt: str,
         system_prompt: Optional[str] = None,
-        file_uris: Optional[list] = None,
-        temperature: float = 0.7,
+        files: Optional[List[Path]] = None,
         model_override: Optional[str] = None,
+        gem_id: Optional[str] = None,
     ) -> str:
-        """Generate content with exponential backoff on failure.
+        """Generate content asynchronously.
         
         Args:
             prompt: The user prompt.
-            system_prompt: Optional system instructions.
-            file_uris: Optional list of uploaded file URIs for context.
-            temperature: Sampling temperature.
-            model_override: Override the default model for this call.
-                           Use GeminiClient.GEMMA_MODEL or GeminiClient.GEMINI_MODEL.
+            system_prompt: System instructions (used only if gem_id not provided).
+            files: Optional list of file paths to include.
+            model_override: Optional model override.
+            gem_id: Gem ID for system prompt (preferred over inline).
             
         Returns:
             Generated text content.
         """
-        # Use override if provided, else default
-        active_model = model_override or self.MODEL
+        await self._ensure_initialized()
         
-        # Check if model supports system instruction
-        model_name = active_model.lower()
-        supports_system_instruction = not any(
-            unsupported in model_name 
-            for unsupported in self.MODELS_WITHOUT_SYSTEM_INSTRUCTION
-        )
+        model = model_override or self.MODEL
         
-        # Build content parts
-        contents = []
+        # Build prompt - use gem_id if available, otherwise inline system prompt
+        if gem_id:
+            full_prompt = prompt
+        elif system_prompt:
+            full_prompt = f"<INSTRUCTIONS>\n{system_prompt}\n</INSTRUCTIONS>\n\n<USER_REQUEST>\n{prompt}\n</USER_REQUEST>"
+        else:
+            full_prompt = prompt
         
-        # Add file references if provided
-        if file_uris:
-            for file_ref in file_uris:
-                # Support both dict format {uri, mime_type} and string format (backward compatible)
-                if isinstance(file_ref, dict):
-                    uri = file_ref["uri"]
-                    mime = file_ref.get("mime_type", "text/plain")
-                else:
-                    uri = file_ref
-                    mime = "text/plain"  # Fallback for legacy string format
-                
-                contents.append(types.Part.from_uri(file_uri=uri, mime_type=mime))
-        
-        # Handle system prompt based on model capability
-        effective_prompt = prompt
-        if system_prompt and not supports_system_instruction:
-            # Prepend system prompt to user prompt for models without system instruction support
-            effective_prompt = f"<INSTRUCTIONS>\n{system_prompt}\n</INSTRUCTIONS>\n\n<USER_REQUEST>\n{prompt}\n</USER_REQUEST>"
-        
-        # Add the text prompt
-        contents.append(effective_prompt)
-        
-        # Build config
-        config = types.GenerateContentConfig(
-            temperature=temperature,
-        )
-        # Only set system_instruction if model supports it
-        if system_prompt and supports_system_instruction:
-            config.system_instruction = system_prompt
-        
-        # === TPM Full Reset: Get the correct bucket for this model ===
-        from utils.rate_limiter import get_token_bucket
-        bucket = get_token_bucket(active_model)
-        bucket.wait_for_full_reset()
-        
-        # Retry with exponential backoff
+        # Retry logic
         for attempt in range(self.MAX_RETRIES):
             try:
-                response = self.client.models.generate_content(
-                    model=active_model,
-                    contents=contents,
-                    config=config,
-                )
-                
-                # === TPM: Record token usage to the model's bucket ===
-                if hasattr(response, "usage_metadata") and response.usage_metadata:
-                    total_tokens = getattr(response.usage_metadata, "total_token_count", 0)
-                    if total_tokens:
-                        bucket.consume(total_tokens)
-                
+                if gem_id:
+                    response = await self._client.generate_content(
+                        full_prompt,
+                        files=files,
+                        model=model,
+                        gem=gem_id
+                    )
+                else:
+                    response = await self._client.generate_content(
+                        full_prompt,
+                        files=files,
+                        model=model
+                    )
                 return response.text
             except Exception as e:
                 if attempt == self.MAX_RETRIES - 1:
                     raise RuntimeError(f"Gemini API failed after {self.MAX_RETRIES} retries: {e}")
                 
                 wait_time = self.BASE_WAIT * (2 ** attempt)
-                print(f"  ⚠ Gemini API error: {e}. Retrying in {wait_time}s...")
-                time.sleep(wait_time)
+                print(f"  ⚠ API error: {e}. Retrying in {wait_time}s...")
+                await asyncio.sleep(wait_time)
         
-        return ""  # Should never reach here
+        return ""
     
-    # MIME type mapping for code files
+    def generate_content(
+        self,
+        prompt: str,
+        system_prompt: Optional[str] = None,
+        file_uris: Optional[List] = None,
+        temperature: float = 0.7,  # Ignored - not supported by web API
+        model_override: Optional[str] = None,
+        gem_id: Optional[str] = None,
+    ) -> str:
+        """Generate content (synchronous wrapper).
+        
+        Args:
+            prompt: The user prompt.
+            system_prompt: System instructions (used if gem_id not provided).
+            file_uris: List of file references (dicts with 'local_path' or 'uri').
+            temperature: Ignored (not supported by web API).
+            model_override: Optional model override.
+            gem_id: Gem ID for system prompt (preferred).
+            
+        Returns:
+            Generated text content.
+        """
+        self._apply_safety_delay()
+        
+        # Convert file_uris to Path objects
+        files = None
+        if file_uris:
+            files = []
+            for ref in file_uris:
+                if isinstance(ref, dict):
+                    path = ref.get("local_path") or ref.get("uri")
+                elif isinstance(ref, str):
+                    path = ref
+                else:
+                    continue
+                
+                if path and os.path.exists(path):
+                    files.append(Path(path))
+        
+        # Use persistent event loop
+        if not self._loop or self._loop.is_closed():
+            self._loop = self._get_or_create_loop()
+        
+        result = self._loop.run_until_complete(
+            self._generate_content_async(
+                prompt=prompt,
+                system_prompt=system_prompt,
+                files=files,
+                model_override=model_override,
+                gem_id=gem_id,
+            )
+        )
+        
+        self._last_request_time = time.time()
+        return result
+    
+    # ==========================================================================
+    # File Operations (Local Path Management)
+    # ==========================================================================
+    
     MIME_TYPES = {
-        # Python
         ".py": "text/x-python",
-        ".pyw": "text/x-python",
-        # JavaScript/TypeScript
-        ".js": "text/javascript",
-        ".jsx": "text/javascript",
-        ".ts": "text/typescript",
-        ".tsx": "text/typescript",
-        ".mjs": "text/javascript",
-        ".cjs": "text/javascript",
-        # Web
-        ".html": "text/html",
-        ".htm": "text/html",
-        ".css": "text/css",
-        ".scss": "text/css",
-        ".sass": "text/css",
-        ".less": "text/css",
-        # Data/Config
+        ".js": "application/javascript",
+        ".ts": "application/typescript",
+        ".tsx": "text/tsx",
+        ".jsx": "text/jsx",
         ".json": "application/json",
+        ".xml": "application/xml",
+        ".html": "text/html",
+        ".css": "text/css",
+        ".md": "text/markdown",
+        ".txt": "text/plain",
         ".yaml": "text/yaml",
         ".yml": "text/yaml",
         ".toml": "text/plain",
-        ".xml": "text/xml",
-        ".ini": "text/plain",
-        ".cfg": "text/plain",
-        ".conf": "text/plain",
-        # Other languages
-        ".java": "text/x-java-source",
-        ".go": "text/x-go",
         ".rs": "text/x-rust",
+        ".go": "text/x-go",
+        ".java": "text/x-java",
         ".c": "text/x-c",
         ".cpp": "text/x-c++",
         ".h": "text/x-c",
         ".hpp": "text/x-c++",
-        ".cs": "text/x-csharp",
-        ".rb": "text/x-ruby",
-        ".php": "text/x-php",
-        ".swift": "text/x-swift",
-        ".kt": "text/x-kotlin",
-        ".scala": "text/x-scala",
-        ".vue": "text/html",
-        ".svelte": "text/html",
-        # Shell
-        ".sh": "text/x-shellscript",
-        ".bash": "text/x-shellscript",
-        ".zsh": "text/x-shellscript",
-        ".ps1": "text/plain",
-        # Docs
-        ".md": "text/markdown",
-        ".txt": "text/plain",
-        ".rst": "text/plain",
-        # Docker/Build
-        "dockerfile": "text/plain",
-        ".dockerfile": "text/plain",
     }
     
     def _get_mime_type(self, file_path: str) -> str:
-        """Get MIME type for a file based on extension.
+        """Get MIME type for a file."""
+        ext = Path(file_path).suffix.lower()
+        return self.MIME_TYPES.get(ext, "text/plain")
+    
+    def prepare_file(self, file_path: str) -> dict:
+        """Prepare a file reference for use in prompts.
         
         Args:
-            file_path: Path to the file.
+            file_path: Path to the local file.
             
         Returns:
-            MIME type string, defaults to text/plain.
+            Dict with 'uri', 'local_path', and 'mime_type'.
         """
-        filename = os.path.basename(file_path).lower()
-        ext = os.path.splitext(filename)[1].lower()
-        
-        # Check extension first
-        if ext in self.MIME_TYPES:
-            return self.MIME_TYPES[ext]
-        
-        # Check full filename (for Dockerfile, etc.)
-        if filename in self.MIME_TYPES:
-            return self.MIME_TYPES[filename]
-        
-        # Default to text/plain for unknown types
-        return "text/plain"
-    
-    def upload_file(self, file_path: str, display_name: Optional[str] = None) -> str:
-        """Upload a file to Gemini Files API.
-        
-        Args:
-            file_path: Path to the file to upload.
-            display_name: Optional display name for the file.
-            
-        Returns:
-            Dict with 'uri' and 'mime_type' for use in prompts.
-        """
-        if not os.path.exists(file_path):
-            raise FileNotFoundError(f"File not found: {file_path}")
-        
-        name = display_name or os.path.basename(file_path)
-        mime_type = self._get_mime_type(file_path)
-        
-        for attempt in range(self.MAX_RETRIES):
-            try:
-                uploaded_file = self.client.files.upload(
-                    file=file_path,
-                    config=types.UploadFileConfig(
-                        display_name=name,
-                        mime_type=mime_type,
-                    ),
-                )
-                # Return dict with both URI and MIME type
-                return {"uri": uploaded_file.uri, "mime_type": mime_type}
-            except Exception as e:
-                if attempt == self.MAX_RETRIES - 1:
-                    raise RuntimeError(f"File upload failed after {self.MAX_RETRIES} retries: {e}")
-                
-                wait_time = self.BASE_WAIT * (2 ** attempt)
-                print(f"  ⚠ Upload error: {e}. Retrying in {wait_time}s...")
-                time.sleep(wait_time)
-        
-        return {"uri": "", "mime_type": "text/plain"}  # Should never reach here
-    
-    def get_file(self, file_uri: str):
-        """Get file info from Gemini API.
-        
-        Args:
-            file_uri: The file URI to check.
-            
-        Returns:
-            File object with state info.
-        """
-        # Extract file name from URI (format: files/xxx or https://.../files/xxx)
-        file_name = file_uri.split("/")[-1]
-        if not file_name.startswith("files/"):
-            file_name = f"files/{file_name}"
-        
-        return self.client.files.get(name=file_name)
-    
-    def wait_for_file_active(self, file_uri: str, timeout: int = 60) -> bool:
-        """Wait for a file to become ACTIVE.
-        
-        Args:
-            file_uri: The file URI to check.
-            timeout: Maximum seconds to wait.
-            
-        Returns:
-            True if file is ACTIVE, False if timeout or FAILED.
-        """
-        file_name = file_uri.split("/")[-1]
-        if not file_name.startswith("files/"):
-            file_name = f"files/{file_name}"
-        
-        start_time = time.time()
-        poll_interval = 2  # seconds
-        
-        while time.time() - start_time < timeout:
-            try:
-                file_info = self.client.files.get(name=file_name)
-                state = getattr(file_info, 'state', None)
-                
-                # State can be a string or enum
-                state_str = str(state).upper() if state else "UNKNOWN"
-                
-                if "ACTIVE" in state_str:
-                    return True
-                elif "FAILED" in state_str:
-                    print(f"  ⚠ File {file_name} failed processing")
-                    return False
-                elif "PROCESSING" in state_str:
-                    time.sleep(poll_interval)
-                else:
-                    # Unknown state, assume it's ready if we can get file info
-                    return True
-                    
-            except Exception as e:
-                # If we can't get file info, wait and retry
-                time.sleep(poll_interval)
-        
-        print(f"  ⚠ Timeout waiting for file {file_name} to become ACTIVE")
-        return False
-    
-    def verify_files_ready(self, file_uris: list, timeout_per_file: int = 30) -> list:
-        """Verify all files are ready (ACTIVE state).
-        
-        Args:
-            file_uris: List of file URIs to check.
-            timeout_per_file: Seconds to wait per file.
-            
-        Returns:
-            List of ready file URIs.
-        """
-        ready_uris = []
-        
-        print(f"   🔍 Verifying {len(file_uris)} files are ready...")
-        
-        for uri in file_uris:
-            if self.wait_for_file_active(uri, timeout=timeout_per_file):
-                ready_uris.append(uri)
-        
-        if len(ready_uris) < len(file_uris):
-            failed_count = len(file_uris) - len(ready_uris)
-            print(f"   ⚠ {failed_count} files failed verification")
-        else:
-            print(f"   ✓ All {len(ready_uris)} files verified as ACTIVE")
-        
-        return ready_uris
-    
-    def delete_file(self, file_uri: str) -> bool:
-        """Delete an uploaded file.
-        
-        Args:
-            file_uri: URI of the file to delete.
-            
-        Returns:
-            True if deletion succeeded.
-        """
-        try:
-            # Extract file name from URI
-            file_name = file_uri.split("/")[-1]
-            self.client.files.delete(name=file_name)
-            return True
-        except Exception as e:
-            print(f"  ⚠ Failed to delete file {file_uri}: {e}")
-            return False
-    
-    def list_files(self) -> list:
-        """List all files on Gemini server.
-        
-        Returns:
-            List of file objects.
-        """
-        try:
-            return list(self.client.files.list())
-        except Exception as e:
-            print(f"  ⚠ Failed to list files: {e}")
-            return []
+        return {
+            "uri": file_path,
+            "local_path": file_path,
+            "mime_type": self._get_mime_type(file_path),
+        }
     
     def cleanup_all_files(self) -> int:
-        """Delete all files from Gemini server.
-        
-        Returns:
-            Count of files deleted.
-        """
-        files = self.list_files()
-        deleted_count = 0
-        
-        for f in files:
-            try:
-                self.client.files.delete(name=f.name)
-                deleted_count += 1
-            except Exception as e:
-                print(f"  ⚠ Failed to delete {f.name}: {e}")
-        
-        return deleted_count
+        """No-op - local files don't need cleanup."""
+        return 0
+
+
+# Backwards compatibility - nodes can still do GeminiClient() but 
+# should prefer get_client()

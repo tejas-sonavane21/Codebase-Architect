@@ -1,5 +1,5 @@
 pocketflow
-google-genai
 python-dotenv
 requests
 gitpython
+gemini_webapi

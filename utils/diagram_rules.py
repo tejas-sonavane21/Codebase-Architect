@@ -2,7 +2,8 @@
 Diagram Rules Manager
 
 Provides isolated, per-diagram-type PlantUML generation rules.
-Only the relevant rules are passed to Gemma for focused generation.
+All rules have ZERO-TOLERANCE enforcement with TERMINATION language.
+Creative freedom WITHIN strict boundaries.
 
 Usage:
     from utils.diagram_rules import get_diagram_rules
@@ -14,83 +15,367 @@ from typing import Optional
 
 
 # ============================================
-# DIAGRAM-SPECIFIC RULES
+# DIAGRAM-SPECIFIC RULES - MAXIMUM ENFORCEMENT
 # ============================================
-# Each diagram type has its own isolated ruleset.
-# Rules are detailed with WRONG/RIGHT examples to guide Gemma.
 
 DIAGRAM_RULES = {
+    # ==========================================================
+    # CLASS DIAGRAM RULES
+    # ==========================================================
     "class": """=== CLASS DIAGRAM RULES ===
-1. VISIBILITY: `+` public, `#` protected, `-` private.
-2. TYPES: Include return types and parameter types when available.
-3. ABSTRACT: Mark abstract classes/methods with `{abstract}`.
-4. INHERITANCE: Use ONLY ONE style per relationship. Never both.
-   WRONG: class Child extends Parent ... Parent <|-- Child (DUPLICATE!)
-   RIGHT: class Child extends Parent (no separate arrow)
-   RIGHT: class Parent ... class Child ... Parent <|-- Child (no extends keyword)
-5. COMPLETENESS: If showing a hierarchy, include ALL classes that extend the base.
-6. NOTES: Add `note` blocks to explain complex logic or design patterns.""",
 
+=== STRUCTURE (MANDATORY) ===
+@startuml
+!theme blueprint
+' Class definitions first
+class "FullClassName" as Alias {
+    +publicMethod(): ReturnType
+    #protectedMethod(): ReturnType
+    -privateMethod(): ReturnType
+}
+' Relationships after all classes defined
+ParentAlias <|-- ChildAlias : extends
+@enduml
+
+=== VISIBILITY MARKERS ===
++ public
+# protected
+- private
+~ package-private
+
+=== NAMING RULES (ZERO TOLERANCE) ===
+Use FULL class names exactly as they appear in codebase_knowledge.xml.
+CORRECT: class "PaymentProcessor" as PaymentProcessor
+CORRECT: class "BaseHandler" as BaseHandler
+WRONG: class "PP" (abbreviation = TERMINATION)
+WRONG: class "Handler" (too generic = TERMINATION)
+
+=== INHERITANCE RULES ===
+Define inheritance ONCE using either:
+- OPTION A: class Child extends Parent { } (inline)
+- OPTION B: Parent <|-- Child (arrow)
+NEVER BOTH = duplicate relationship = TERMINATION
+
+=== COMPOSITION/AGGREGATION ===
+- Composition (owns): ClassA *-- ClassB : contains
+- Aggregation (uses): ClassA o-- ClassB : has
+- Dependency: ClassA ..> ClassB : uses
+- Association: ClassA --> ClassB : calls
+
+=== COMPLETENESS ===
+If base class has N subclasses, show ALL N subclasses.
+Showing only 2 of 5 handlers = INCOMPLETE = TERMINATION
+
+=== LABELS ===
+Every relationship arrow MUST have a label describing the relationship.
+WRONG: Parent <|-- Child (no label)
+RIGHT: Parent <|-- Child : extends""",
+
+    # ==========================================================
+    # COMPONENT DIAGRAM RULES
+    # ==========================================================
     "component": """=== COMPONENT DIAGRAM RULES ===
-1. STRUCTURE: Use `component "Name" as Alias`. Components CANNOT contain text.
-   WRONG: component "Flow" { Uses PocketFlow }
-   WRONG: component "Nodes" { Includes ScoutNode }
-   RIGHT: component "Flow" as Flow
-   RIGHT: component "Nodes" as Nodes
-2. GROUPING: Define components INSIDE the package, not outside then reference.
-   WRONG: component "Flow" as Flow ... package "App" { Flow }
-   RIGHT: package "App" { component "Flow" as Flow }
-3. DESCRIPTIONS: Use `note right of Alias` for descriptions.
-   RIGHT: note right of Flow : Uses PocketFlow framework
-4. LABELS: All arrows must have SPECIFIC labels (method names, data types), not generic "uses".
-5. EXTERNAL SYSTEMS: For external APIs/services, use simple component names without internal structure.""",
 
+=== STRUCTURE (MANDATORY) ===
+@startuml
+!theme blueprint
+package "PackageName" {
+    component "ComponentName" as Alias
+}
+Alias1 --> Alias2 : relationship
+@enduml
+
+=== COMPONENT DEFINITION ===
+Use FULL component names exactly as they appear in codebase_knowledge.xml.
+CORRECT: component "OrderService" as OrderService
+WRONG: component "OS" as OS (abbreviation = TERMINATION)
+
+=== GROUPING RULES ===
+Define components INSIDE packages, not outside then reference.
+WRONG: component "Flow" as Flow ... package "App" { Flow }
+RIGHT: package "App" { component "Flow" as Flow }
+
+=== RELATIONSHIP LABELS (MANDATORY) ===
+Every arrow MUST have a specific label:
+- What method is called
+- What data flows
+- What event triggers
+
+WRONG: A --> B (no label = TERMINATION)
+RIGHT: OrderService --> PaymentGateway : processPayment()
+RIGHT: DataExporter --> FileWriter : saveToFile()
+
+=== NOTES ===
+Use notes for important context:
+note right of ComponentAlias : Description of purpose
+
+=== COMPLETENESS ===
+A component diagram with components but NO relationships = WORTHLESS = TERMINATION
+Every diagram must show at least 2 meaningful relationships.""",
+
+    # ==========================================================
+    # SEQUENCE DIAGRAM RULES
+    # ==========================================================
     "sequence": """=== SEQUENCE DIAGRAM RULES ===
-1. ACTOR REQUIRED: Every sequence diagram MUST start with an `actor "User"` or equivalent initiator.
-2. PARTICIPANTS: Use actual class names from user code. `participant "ClassName" as Alias`.
-3. DECLARE BEFORE USE: Every participant MUST be declared before using in arrows.
-   WRONG: A -> UndeclaredAPI : call (ERROR: UndeclaredAPI not defined!)
-   RIGHT: participant "ExternalAPI" as API / A -> API : call
-4. LIBRARY EXCLUSION: Do NOT create participants for standard library modules (`argparse`, `asyncio`, `os`, `sys`, `json`, `logging`, `re`, `time`) OR third-party libraries (`aiohttp`, `requests`, `BeautifulSoup`, `bs4`, `httpx`). These are implementation details, not architecture.
-5. ARROWS: Label every arrow with the method call or action: `A -> B : search(query)`.
-6. CONTROL FLOW:
-   - `alt/else/end` for conditionals.
-   - `loop/end` for iterations.
-   - `par/end par` for concurrent execution.
-7. VISUAL POLISH: Use activation colors to distinguish phases: `activate VS #LightBlue`, `activate VS #LightGreen`.
-8. COMPLETENESS: If the diagram involves N similar components, show ALL of them, not just one representative.
-9. NOTES: Annotate important steps with `note right` explaining the logic.
-10. ONE WORKFLOW: Show only ONE class/component's workflow per diagram. Do NOT merge unrelated workflows.
-11. SIMPLICITY: When in doubt, simplify. Remove complex constructs rather than risk invalid syntax.""",
 
+=== STRUCTURE (MANDATORY - EXACT ORDER) ===
+@startuml
+!theme blueprint
+' === DECLARATIONS (ALL participants before ANY arrows) ===
+actor "User" as User
+participant "FullClassName1" as Alias1
+participant "FullClassName2" as Alias2
+
+' === INTERACTIONS (only after ALL declarations) ===
+User -> Alias1 : methodCall()
+activate Alias1
+Alias1 -> Alias2 : anotherMethod()
+Alias2 --> Alias1 : returnValue
+deactivate Alias1
+@enduml
+
+=== DECLARATION RULES (ZERO TOLERANCE) ===
+EVERY alias used in arrows MUST be declared first.
+Using undeclared alias = SYNTAX ERROR = TERMINATION
+
+WRONG:
+XS -> YH : action (XS and YH not declared = TERMINATION)
+
+CORRECT:
+participant "OrderController" as OrderController
+participant "InventoryService" as InventoryService
+OrderController -> InventoryService : checkStock(itemId)
+
+=== NAMING RULES (ZERO TOLERANCE) ===
+Use FULL class names from codebase_knowledge.xml:
+CORRECT: participant "AuthenticationService" as AuthenticationService
+WRONG: participant "AS" as AS (abbreviation = TERMINATION)
+WRONG: participant "Service" as Service (too generic = TERMINATION)
+
+=== ARROW LABELS (MANDATORY) ===
+Every arrow MUST have a method call or action:
+CORRECT: Client -> Server : sendRequest(payload)
+CORRECT: Server --> Client : responseData
+WRONG: Client -> Server (no label = TERMINATION)
+
+=== FORBIDDEN PARTICIPANTS ===
+NEVER include standard library or third-party as participants:
+FORBIDDEN: json, os, sys, logging, requests, aiohttp, BeautifulSoup, httpx, certifi, asyncio
+These are implementation details, not architecture.
+
+=== CONTROL FLOW ===
+- Conditions: alt / else / end
+- Loops: loop / end
+- Activation: activate Alias / deactivate Alias
+
+=== COMPLETENESS ===
+- Show the COMPLETE flow from trigger to result
+- Minimum 5 interactions for a meaningful sequence
+- A 3-line sequence diagram = INCOMPLETE = TERMINATION""",
+
+    # ==========================================================
+    # ACTIVITY DIAGRAM RULES
+    # ==========================================================
     "activity": """=== ACTIVITY DIAGRAM RULES ===
-1. START/END: Use `start` and `stop` keywords.
-2. ACTIONS: Use `:Action description;` syntax.
-3. DECISIONS: Use `if (condition?) then (yes)` / `else (no)` / `endif`.
-4. LOOPS: Use ONLY `repeat` / `repeat while (condition)` for loops.
-   WRONG: -> LabelName; (broken goto - creates dangling arrow)
-   WRONG: repeat for each item (INVALID SYNTAX!)
-   RIGHT: repeat / :action; / repeat while (condition) is true
-5. ANNOTATIONS: Add `note right` after decision branches to explain logic.
-6. PARALLEL: Use `fork` and `end fork` for concurrent activities.
-7. SWIMLANE ORDERING: If using swimlanes, define them BEFORE `start` or any actions.
-   WRONG: start / :action; / |Swimlane| (swimlane AFTER actions = ERROR!)
-   RIGHT: |Swimlane| / start / :action; (swimlane FIRST)
-8. NO ORPHAN SWIMLANES: Do NOT add disconnected swimlane blocks at the end of the diagram.
-9. SPECIFICITY: Inside actions, mention specific methods or values when known.
-10. SIMPLICITY: When in doubt, simplify. Remove complex nested structures rather than risk invalid syntax.""",
 
+=== STRUCTURE (MANDATORY) ===
+@startuml
+!theme blueprint
+start
+:First action;
+if (condition?) then (yes)
+    :Action if true;
+else (no)
+    :Action if false;
+endif
+:Final action;
+stop
+@enduml
+
+=== START/END ===
+MUST begin with: start
+MUST end with: stop (normal) or end (error/exception)
+
+=== ACTIONS ===
+Use colon-semicolon syntax: :Action description;
+CORRECT: :Parse input parameters;
+CORRECT: :Process all pending requests;
+
+=== DECISIONS ===
+CORRECT syntax:
+if (condition?) then (yes)
+    :action;
+else (no)
+    :action;
+endif
+
+=== LOOPS ===
+ONLY use repeat/repeat while syntax:
+repeat
+    :action;
+repeat while (condition?) is (true)
+
+WRONG: for each item (INVALID SYNTAX = TERMINATION)
+WRONG: -> label (creates broken arrow = TERMINATION)
+
+=== SWIMLANES ===
+If using swimlanes, define BEFORE start:
+|Swimlane1|
+start
+:action;
+
+WRONG: start / :action; / |Swimlane| (swimlane after start = ERROR)
+
+=== FORK/JOIN ===
+For parallel activities:
+fork
+    :Parallel action 1;
+fork again
+    :Parallel action 2;
+end fork
+
+=== COMPLETENESS ===
+Show the COMPLETE workflow from start to stop.
+An activity diagram with < 5 actions = INCOMPLETE = TERMINATION""",
+
+    # ==========================================================
+    # STATE DIAGRAM RULES
+    # ==========================================================
     "state": """=== STATE DIAGRAM RULES ===
-1. STATES: Use `state "StateName" as Alias`.
-2. TRANSITIONS: Label with trigger/condition: `State1 --> State2 : event`.
-3. INITIAL/FINAL: Use `[*] --> FirstState` and `LastState --> [*]`.
-4. NESTED: Use `state ParentState { ... }` for composite states.""",
 
+=== STRUCTURE (MANDATORY) ===
+@startuml
+!theme blueprint
+[*] --> InitialState : trigger
+state "StateName" as Alias {
+    Alias : entry / action
+    Alias : exit / action
+}
+StateName --> NextState : event
+FinalState --> [*]
+@enduml
+
+=== STATE DEFINITION ===
+CORRECT: state "Idle" as Idle
+CORRECT: state "Processing" as Processing
+
+=== TRANSITIONS ===
+Every transition MUST have a trigger/event label:
+CORRECT: Idle --> Processing : start_requested
+WRONG: Idle --> Processing (no trigger = TERMINATION)
+
+=== INITIAL/FINAL ===
+[*] --> FirstState : initialization
+LastState --> [*] : completion
+
+=== NESTED STATES ===
+state ParentState {
+    state ChildState1
+    state ChildState2
+}
+
+=== COMPLETENESS ===
+Show ALL states an object can be in, not just main ones.
+A state diagram with < 3 states = TOO SIMPLE = TERMINATION""",
+
+    # ==========================================================
+    # USE CASE DIAGRAM RULES
+    # ==========================================================
     "usecase": """=== USE CASE DIAGRAM RULES ===
-1. ACTORS: Use `actor "ActorName" as Alias`.
-2. USE CASES: Use `usecase "Action" as UC1`.
-3. RELATIONSHIPS: `Actor --> UseCase` for associations.
-4. BOUNDARIES: Use `rectangle "System" { ... }` to define system scope.""",
+
+=== STRUCTURE (MANDATORY) ===
+@startuml
+!theme blueprint
+actor "ActorName" as Actor
+rectangle "System Boundary" {
+    usecase "Action Description" as UC1
+    usecase "Another Action" as UC2
+}
+Actor --> UC1
+UC1 ..> UC2 : <<include>>
+@enduml
+
+=== ACTORS ===
+CORRECT: actor "Security Analyst" as Analyst
+CORRECT: actor "CLI User" as User
+WRONG: actor "U" (abbreviation = TERMINATION)
+
+=== USE CASES ===
+CORRECT: usecase "Create New Order" as UC1
+CORRECT: usecase "Generate Report" as UC2
+
+=== RELATIONSHIPS ===
+- Association: Actor --> UseCase
+- Include: UC1 ..> UC2 : <<include>>
+- Extend: UC2 ..> UC1 : <<extend>>
+
+=== SYSTEM BOUNDARY ===
+Use rectangle to show system scope:
+rectangle "Application System" {
+    usecase "Primary Action" as UC1
+}
+
+=== COMPLETENESS ===
+Show ALL major use cases, not just one.
+A use case diagram with < 3 use cases = INCOMPLETE = TERMINATION""",
+
+    # ==========================================================
+    # ER (ENTITY-RELATIONSHIP) DIAGRAM RULES
+    # ==========================================================
+    "er": """=== ER (ENTITY-RELATIONSHIP) DIAGRAM RULES ===
+
+=== STRUCTURE (MANDATORY) ===
+@startuml
+!theme blueprint
+entity "EntityName" as Alias {
+    *primary_key : type <<PK>>
+    --
+    attribute1 : type
+    attribute2 : type
+}
+
+Entity1 ||--o{ Entity2 : relationship_label
+@enduml
+
+=== ENTITY DEFINITION ===
+Use FULL entity names as they appear in codebase_knowledge.xml.
+CORRECT: entity "Customer" as Customer
+CORRECT: entity "OrderItem" as OrderItem
+WRONG: entity "C" as C (abbreviation = TERMINATION)
+
+=== ATTRIBUTE SYNTAX ===
+* marks primary key
+-- separates primary keys from other attributes
+Optional: <<PK>>, <<FK>>, <<unique>>
+
+Example:
+entity "UserAccount" as User {
+    *user_id : int <<PK>>
+    --
+    username : varchar
+    email : varchar <<unique>>
+    created_at : timestamp
+}
+
+=== RELATIONSHIP CARDINALITY ===
+Use crow's foot notation:
+- ||--|| : one to one
+- ||--o{ : one to many
+- }o--o{ : many to many
+- ||--o| : one to zero or one
+
+CORRECT: User ||--o{ Order : places
+CORRECT: Order }o--o{ Product : contains
+WRONG: User -- Order (no cardinality = TERMINATION)
+
+=== RELATIONSHIP LABELS (MANDATORY) ===
+Every relationship MUST have a descriptive label:
+CORRECT: Customer ||--o{ Order : places
+WRONG: Customer ||--o{ Order (no label = TERMINATION)
+
+=== COMPLETENESS ===
+Show ALL entities and their relationships.
+An ER diagram with < 3 entities = TOO SIMPLE = TERMINATION""",
 }
 
 
@@ -125,6 +410,11 @@ def get_diagram_rules(diagram_type: str) -> str:
         "usecase": "usecase",
         "use case": "usecase",
         "use case diagram": "usecase",
+        "er": "er",
+        "entity-relationship": "er",
+        "entity relationship": "er",
+        "erd": "er",
+        "er diagram": "er",
     }
     
     mapped_type = type_mapping.get(normalized, normalized)
