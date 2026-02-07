@@ -1,22 +1,31 @@
 """
-Node 4: The Architect
+Node 4: The Architect (Dual-Prompt)
 
-Plans focused architectural diagrams based on the codebase knowledge.
-Avoids "God Diagrams" by breaking into sub-modules.
+Plans focused architectural diagrams using a two-pass strategy:
+1. Pass 1 (Behavioral): State machines, algorithms, workflows
+2. Pass 2 (Structural): Classes, components, modules
+3. Pass 3 (Merge): AI-driven deduplication
+
+Uses dynamic gem updates to switch between prompts.
 """
 
 import json
 import os
-from typing import Optional
+from typing import Optional, Dict, List
 from pocketflow import Node
 
 from utils.gemini_client import get_client
 from utils.prompts import get_prompt, get_gem_id
+from utils.gem_manager import update_gem
 from utils.output_cleaner import clean_json
 
 
+# ID offset for structural diagrams (prevents ID collision)
+STRUCTURAL_ID_OFFSET = 100
+
+
 class ArchitectNode(Node):
-    """Architect node that plans focused diagrams using LLM."""
+    """Architect node that plans focused diagrams using dual-prompt LLM strategy."""
     
     def __init__(self, max_retries: int = 3, wait: int = 2):
         super().__init__(max_retries=max_retries, wait=wait)
@@ -48,10 +57,45 @@ class ArchitectNode(Node):
             "use_knowledge": True,
         }
     
-    def exec(self, prep_res: dict) -> dict:
-        """Generate diagram plan using Gemini."""
+    def _update_gem_prompt(self, prompt_key: str, description: str) -> bool:
+        """
+        Dynamically update the 'architect' gem with a different prompt.
+        
+        Args:
+            prompt_key: Key in PROMPTS dict (e.g., 'architect', 'architect_overview')
+            description: Description for the updated gem
+            
+        Returns:
+            True if update succeeded.
+        """
+        gem_id = get_gem_id("architect")
+        if not gem_id:
+            return False
+        
+        prompt_content = get_prompt(prompt_key, self.client.MODEL)
+        
+        success = update_gem(
+            self.client,
+            "architect",
+            name=f"codebase-architect",
+            prompt=prompt_content,
+            description=description
+        )
+        
+        return success
+    
+    def _generate_plan(self, prep_res: dict, pass_name: str) -> Dict:
+        """
+        Generate a diagram plan using current gem configuration.
+        
+        Args:
+            prep_res: Prepared resources from prep()
+            pass_name: Name of the pass for logging
+            
+        Returns:
+            Diagram plan dict.
+        """
         active_model = self.client.MODEL
-        print(f"📐 Planning architectural diagrams with {active_model}...")
         
         if prep_res.get("use_knowledge"):
             prompt = """Analyze the attached codebase_knowledge.xml file and propose focused architectural diagrams.
@@ -112,37 +156,88 @@ Propose specific, focused diagrams that would help a developer understand this c
             if "diagrams" not in plan:
                 plan["diagrams"] = []
             
-            print(f"   ✓ Planned {len(plan['diagrams'])} diagrams")
-            
-            for d in plan["diagrams"]:
-                print(f"      [{d['id']}] {d['name']} ({d['type']})")
-            
             return plan
             
         except json.JSONDecodeError as e:
-            print(f"   ⚠ Failed to parse response: {e}")
-            
-            return {
-                "project_summary": "Unable to fully analyze project",
-                "diagrams": [
-                    {
-                        "id": 1,
-                        "name": "System Overview Class Diagram",
-                        "type": "class",
-                        "focus": "Main classes and their relationships",
-                        "files": [],
-                        "complexity": "medium",
-                    },
-                    {
-                        "id": 2,
-                        "name": "Component Architecture",
-                        "type": "component",
-                        "focus": "High-level system components and dependencies",
-                        "files": [],
-                        "complexity": "low",
-                    },
-                ],
-            }
+            print(f"      ⚠ Failed to parse {pass_name} response: {e}")
+            return {"project_summary": "", "diagrams": []}
+    
+    def _offset_diagram_ids(self, diagrams: List[Dict], offset: int) -> List[Dict]:
+        """Add offset to diagram IDs to prevent collision."""
+        for d in diagrams:
+            d["id"] = d.get("id", 0) + offset
+        return diagrams
+    
+    def exec(self, prep_res: dict) -> dict:
+        """
+        Generate diagram plan using dual-prompt strategy.
+        
+        Pass 1: Behavioral Analysis (State, Activity, Sequence)
+        Pass 2: Structural Analysis (Class, Component)
+        
+        Note: Audit/deduplication is now handled by AuditNode at the end of the flow.
+        """
+        active_model = self.client.MODEL
+        print(f"📐 Planning architectural diagrams with {active_model}...")
+        print(f"   🎯 Using Dual-Prompt Strategy (Behavioral + Structural)")
+        
+        # =========================================================
+        # PASS 1: Behavioral Analysis
+        # =========================================================
+        print(f"\n   === PASS 1: Behavioral Analysis ===")
+        behavioral_plan = self._generate_plan(prep_res, "Behavioral")
+        behavioral_count = len(behavioral_plan.get("diagrams", []))
+        print(f"      ✓ Found {behavioral_count} behavioral diagrams")
+        
+        for d in behavioral_plan.get("diagrams", []):
+            print(f"         [{d['id']}] {d['name']} ({d['type']})")
+        
+        # =========================================================
+        # PASS 2: Structural Analysis (Dynamic Gem Update)
+        # =========================================================
+        print(f"\n   === PASS 2: Structural Analysis ===")
+        print(f"      ⚙ Updating 'architect' gem to Structural mode...")
+        
+        self._update_gem_prompt("architect_overview", "STRUCTURAL-MAPPER: High-level architecture planner")
+        
+        structural_plan = self._generate_plan(prep_res, "Structural")
+        
+        # Offset IDs to prevent collision
+        structural_plan["diagrams"] = self._offset_diagram_ids(
+            structural_plan.get("diagrams", []), 
+            STRUCTURAL_ID_OFFSET
+        )
+        
+        structural_count = len(structural_plan.get("diagrams", []))
+        print(f"      ✓ Found {structural_count} structural diagrams")
+        
+        for d in structural_plan.get("diagrams", []):
+            print(f"         [{d['id']}] {d['name']} ({d['type']})")
+        
+        # Restore original prompt
+        print(f"      ⚙ Restoring 'architect' gem to Behavioral mode...")
+        self._update_gem_prompt("architect", "DIAGRAM-STRATEGIST: Strategic diagram planner")
+        
+        # =========================================================
+        # MERGE: Combine all diagrams (Audit happens later in AuditNode)
+        # =========================================================
+        print(f"\n   === Merging Diagram Plans ===")
+        all_diagrams = behavioral_plan.get("diagrams", []) + structural_plan.get("diagrams", [])
+        
+        # Renumber IDs sequentially
+        for i, d in enumerate(all_diagrams, 1):
+            d["id"] = i
+        
+        final_plan = {
+            "project_summary": behavioral_plan.get("project_summary", structural_plan.get("project_summary", "")),
+            "diagrams": all_diagrams
+        }
+        
+        print(f"\n   ✓ Combined plan: {len(all_diagrams)} diagrams (audit pending)")
+        for d in all_diagrams:
+            print(f"      [{d['id']}] {d['name']} ({d['type']})")
+        
+        return final_plan
     
     def post(self, shared: dict, prep_res: dict, exec_res: dict) -> str:
         """Store the diagram plan."""

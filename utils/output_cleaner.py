@@ -35,10 +35,13 @@ def clean_gemini_output(text: str, output_type: str = "generic") -> str:
     # Step 1: Remove markdown code blocks
     text = _strip_markdown_blocks(text, output_type)
     
-    # Step 2: Fix escaped characters (common to all types)
+    # Step 2: Remove stray markdown artifacts (fences in middle of content)
+    text = _remove_stray_markdown(text)
+    
+    # Step 3: Fix escaped characters (common to all types)
     text = _unescape_characters(text)
     
-    # Step 3: Apply type-specific cleaning
+    # Step 4: Apply type-specific cleaning
     if output_type == "xml":
         text = _clean_xml_specific(text)
     elif output_type == "json":
@@ -50,15 +53,15 @@ def clean_gemini_output(text: str, output_type: str = "generic") -> str:
 
 
 def _strip_markdown_blocks(text: str, output_type: str) -> str:
-    """Remove markdown code block fences."""
+    """Remove markdown code block fences with robust handling."""
     if "```" not in text:
         return text
     
-    # Try regex pattern for code blocks
-    # Matches ```lang or ``` followed by content and closing ```
+    # Pattern 1: Standard code block at start/end
+    # Matches ```lang\n...content...\n``` at boundaries
     patterns = [
-        r"```(?:plantuml|xml|json|javascript|python)?\s*\n(.*?)\s*```",
-        r"```\s*\n(.*?)\s*```",
+        r"^```(?:plantuml|xml|json|javascript|python|html|css)?\s*\n(.*?)\n?```\s*$",
+        r"^```\s*\n(.*?)\n?```\s*$",
     ]
     
     for pattern in patterns:
@@ -66,17 +69,54 @@ def _strip_markdown_blocks(text: str, output_type: str) -> str:
         if match:
             return match.group(1).strip()
     
-    # Fallback: manual line stripping
-    lines = text.split("\n")
-    if len(lines) >= 2 and lines[0].strip().startswith("```"):
-        # Remove first line
-        lines = lines[1:]
-        # Remove last line if it's closing fence
-        if lines and lines[-1].strip() == "```":
-            lines = lines[:-1]
-        return "\n".join(lines).strip()
+    # SAFETY CHECK: If it already looks like XML/JSON, don't try to extract inner blocks
+    # This prevents stripping the root tags if the XML contains a markdown block inside CDATA
+    if output_type == "xml" and "<codebase_knowledge" in text:
+        return text
+        
+    # Pattern 2: Code block anywhere in text (extract first complete block)
+    # This handles cases where there's text before/after the code block
+    block_pattern = r"```(?:plantuml|xml|json|javascript|python|html|css)?\s*\n(.*?)\n?```"
+    match = re.search(block_pattern, text, re.DOTALL | re.IGNORECASE)
+    if match:
+        return match.group(1).strip()
     
-    return text
+    # Fallback: manual line stripping for partial fences
+    lines = text.split("\n")
+    result_lines = []
+    in_code_block = False
+    
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("```") and not in_code_block:
+            in_code_block = True
+            continue
+        elif stripped == "```" and in_code_block:
+            in_code_block = False
+            continue
+        elif in_code_block or not stripped.startswith("```"):
+            result_lines.append(line)
+    
+    return "\n".join(result_lines).strip()
+
+
+def _remove_stray_markdown(text: str) -> str:
+    """Remove stray markdown fences that appear in the middle of content."""
+    # Remove lines that are ONLY backticks (stray fences)
+    lines = text.split("\n")
+    cleaned_lines = []
+    
+    for line in lines:
+        stripped = line.strip()
+        # Skip lines that are only backticks (1-4 backticks)
+        if re.match(r'^`{1,4}$', stripped):
+            continue
+        # Skip lines that are markdown fence with optional language
+        if re.match(r'^```[a-zA-Z]*\s*$', stripped):
+            continue
+        cleaned_lines.append(line)
+    
+    return "\n".join(cleaned_lines)
 
 
 def _unescape_characters(text: str) -> str:

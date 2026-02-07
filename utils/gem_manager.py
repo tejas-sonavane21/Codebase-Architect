@@ -67,9 +67,24 @@ class GemManager:
                 "prompt": PROMPTS["drafter"],
                 "description": "PLANTUML-ENGINE: Zero-tolerance PlantUML generator"
             },
+            "plan_auditor": {
+                "name": "codebase-plan-auditor",
+                "prompt": PROMPTS["plan_auditor"],
+                "description": "DIAGRAM-AUDITOR: Intelligent diagram plan auditor (Phase 1)"
+            },
+            "code_auditor": {
+                "name": "codebase-code-auditor",
+                "prompt": PROMPTS["code_auditor"],
+                "description": "CODE-AUDITOR: PlantUML content comparison auditor (Phase 2)"
+            },
+            "supervisor": {
+                "name": "codebase-supervisor",
+                "prompt": PROMPTS["supervisor"],
+                "description": "SENIOR-REVIEWER: Agentic self-correction supervisor"
+            },
         }
     
-    REQUIRED_GEMS = ["surveyor", "summarizer_pass1", "summarizer_pass2", "architect", "drafter"]
+    REQUIRED_GEMS = ["surveyor", "summarizer_pass1", "summarizer_pass2", "architect", "drafter", "plan_auditor", "code_auditor", "supervisor"]
     
     # =========================================================
     # CONFIG OPERATIONS (Local File)

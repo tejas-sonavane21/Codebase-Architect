@@ -7,6 +7,7 @@ from .architect import ArchitectNode
 from .human_handshake import HumanHandshakeNode
 from .drafter import DrafterNode
 from .critic import CriticNode
+from .audit import AuditNode
 
 __all__ = [
     "ScoutNode",
@@ -17,4 +18,5 @@ __all__ = [
     "HumanHandshakeNode",
     "DrafterNode",
     "CriticNode",
+    "AuditNode",
 ]

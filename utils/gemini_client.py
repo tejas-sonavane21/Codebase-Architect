@@ -45,7 +45,7 @@ class GeminiClient:
     
     # Request timing
     SAFETY_DELAY = 2  # seconds between requests
-    MAX_RETRIES = 3
+    MAX_RETRIES = 5
     BASE_WAIT = 10  # seconds for retry backoff
     
     def __init__(self):

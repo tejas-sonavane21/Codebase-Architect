@@ -21,6 +21,8 @@ share/python-wheels/
 .installed.cfg
 *.egg
 MANIFEST
+tests/
+test_http/
 
 # Virtual Environment
 venv/
@@ -57,3 +59,4 @@ response.txt
 concept.txt
 online_resource.md
 collapse_suggestion.txt
+gemini_gems/

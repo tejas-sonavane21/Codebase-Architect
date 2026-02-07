@@ -15,13 +15,13 @@ from utils.gem_manager import update_gem
 from utils.output_cleaner import clean_plantuml
 
 
-MAX_RETRIES = 3  # Maximum retries per diagram
+MAX_RETRIES = 5  # Maximum retries per diagram
 
 
 class DrafterNode(Node):
     """Drafter node that generates PlantUML code using LLM."""
     
-    def __init__(self, max_retries: int = 3, wait: int = 2):
+    def __init__(self, max_retries: int = MAX_RETRIES, wait: int = 2):
         super().__init__(max_retries=max_retries, wait=wait)
         self.client: Optional[GeminiClient] = None
     

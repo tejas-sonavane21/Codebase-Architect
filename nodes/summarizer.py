@@ -13,6 +13,7 @@ from pocketflow import Node
 from utils.gemini_client import get_client
 from utils.prompts import get_prompt, get_gem_id
 from utils.output_cleaner import clean_xml
+from utils.response_supervisor import ResponseSupervisor
 
 
 # Threshold for keeping full content vs summarizing
@@ -106,7 +107,8 @@ class SummarizerNode(Node):
                     "mime_type": f.get("mime_type", "text/plain")
                 })
         
-        prompt = f"""Current codebase knowledge:
+        prompt = f"""Give me XML code. 
+        Current codebase knowledge:
 ```xml
 {current_xml}
 ```
@@ -115,33 +117,52 @@ Analyze these new files and UPDATE the XML by adding entries for them:
 
 {chr(10).join(file_descriptions)}
 
-Return the COMPLETE updated XML with the new file entries added."""
+Return the COMPLETE updated XML code with the new file entries added."""
 
-        try:
+        # Build context for supervisor
+        batch_file_paths = [f.get("path", "unknown") for f in batch_files]
+        
+        # Define generate function that takes critique and returns CLEANED response
+        def generate_with_critique(critique: str = "") -> str:
             active_model = self.client.MODEL
             gem_id = get_gem_id("summarizer_pass1")
             
+            full_prompt = prompt
+            if critique:
+                full_prompt += f"\n\n[SUPERVISOR FEEDBACK]\n{critique}\nPlease regenerate a CORRECT response."
+            
             response = self.client.generate_content(
-                prompt=prompt,
+                prompt=full_prompt,
                 system_prompt=None if gem_id else get_prompt("summarizer_pass1", active_model),
                 file_uris=file_refs if file_refs else None,
-                temperature=0.3,
                 model_override=active_model,
                 gem_id=gem_id,
             )
-            
-            # Clean XML output from Gemini web (handles escaped characters)
-            xml_content = clean_xml(response)
-            
-            if "<codebase_knowledge" in xml_content and "</codebase_knowledge>" in xml_content:
-                return xml_content, True
-            else:
-                print(f"      ⚠ Invalid XML response, using previous state")
-                return current_xml, False
-                
+            return clean_xml(response)  # Clean before returning
+        
+        # Generate initial response and clean it
+        try:
+            initial_response = generate_with_critique("")
         except Exception as e:
-            print(f"      ⚠ Batch failed: {str(e)[:100]}...")
+            print(f"      ⚠ Initial generation failed: {str(e)[:100]}")
             return current_xml, False
+        
+        # Use supervisor with optimized flow (local validation first)
+        supervisor = ResponseSupervisor(self.client, max_retries=10)
+        
+        context = {
+            "previous_xml": current_xml,
+            "batch_files": batch_file_paths,
+            "original_prompt": prompt,
+        }
+        
+        xml_content, success = supervisor.supervise_xml(
+            cleaned_response=initial_response,
+            context=context,
+            generate_with_critique_fn=generate_with_critique
+        )
+        
+        return xml_content, success
     
     def _add_relationships(self, current_xml: str) -> str:
         """Pass 2: Add relationship analysis to knowledge XML."""
@@ -154,30 +175,46 @@ Return the COMPLETE updated XML with the new file entries added."""
 Add <relationships> and <architecture> sections to the XML.
 Return the COMPLETE updated XML."""
 
-        try:
+        # Define generate function that returns CLEANED response
+        def generate_with_critique(critique: str = "") -> str:
             active_model = self.client.MODEL
             gem_id = get_gem_id("summarizer_pass2")
             
+            full_prompt = prompt
+            if critique:
+                full_prompt += f"\n\n[SUPERVISOR FEEDBACK]\n{critique}\nPlease regenerate a CORRECT response."
+            
             response = self.client.generate_content(
-                prompt=prompt,
+                prompt=full_prompt,
                 system_prompt=None if gem_id else get_prompt("summarizer_pass2", active_model),
-                temperature=0.3,
                 model_override=active_model,
                 gem_id=gem_id,
             )
-            
-            # Clean XML output from Gemini web (handles escaped characters)
-            xml_content = clean_xml(response)
-            
-            if "<relationships>" in xml_content or "<architecture>" in xml_content:
-                return xml_content
-            else:
-                print("   ⚠ Pass 2 response missing relationship sections, keeping original")
-                return current_xml
-                
+            return clean_xml(response)
+        
+        # Generate initial response
+        try:
+            initial_response = generate_with_critique("")
         except Exception as e:
-            print(f"   ⚠ Relationship pass failed: {str(e)[:100]}...")
+            print(f"   ⚠ Pass 2 initial generation failed: {str(e)[:100]}")
             return current_xml
+        
+        # Use supervisor with optimized flow (local validation first)
+        supervisor = ResponseSupervisor(self.client, max_retries=10)
+        
+        context = {
+            "previous_xml": current_xml,
+            "batch_files": [],  # No new files in Pass 2
+            "original_prompt": prompt,
+        }
+        
+        xml_content, success = supervisor.supervise_xml(
+            cleaned_response=initial_response,
+            context=context,
+            generate_with_critique_fn=generate_with_critique
+        )
+        
+        return xml_content
     
     def prep(self, shared: dict) -> dict:
         """Prepare for summarization."""

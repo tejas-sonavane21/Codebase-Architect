@@ -15,6 +15,7 @@ from nodes.architect import ArchitectNode
 from nodes.human_handshake import HumanHandshakeNode
 from nodes.drafter import DrafterNode
 from nodes.critic import CriticNode
+from nodes.audit import AuditNode
 
 
 def create_diagram_generation_flow() -> Flow:
@@ -43,6 +44,11 @@ def create_diagram_generation_flow() -> Flow:
     │                              ▼                              │
     │                         Next Diagram                        │
     └─────────────────────────────────────────────────────────────┘
+                             │
+                             ▼ (complete)
+                    ┌───────────────┐
+                    │   AuditNode   │ (Post-Generation Audit)
+                    └───────────────┘
     
     Returns:
         Configured PocketFlow Flow.
@@ -56,6 +62,7 @@ def create_diagram_generation_flow() -> Flow:
     handshake = HumanHandshakeNode()
     drafter = DrafterNode()
     critic = CriticNode()
+    audit = AuditNode()
     
     # Wire the main pipeline
     # Scout -> Surveyor -> Uploader -> Summarizer -> Architect -> Handshake
@@ -70,8 +77,8 @@ def create_diagram_generation_flow() -> Flow:
     # Drafter -> Critic (on "validate" action)
     drafter.next(critic, "validate")
     
-    # Drafter -> End (on "complete" action, all diagrams done)
-    # (No successor means flow ends)
+    # Drafter -> AuditNode (on "complete" action, all diagrams done)
+    drafter.next(audit, "complete")
     
     # Self-correction loop:
     # Critic -> Drafter (on "retry" action, diagram failed validation)
