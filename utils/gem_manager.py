@@ -18,6 +18,7 @@ import json
 import asyncio
 from pathlib import Path
 from typing import Optional, Dict
+from utils.console import console
 
 
 class GemManager:
@@ -101,7 +102,7 @@ class GemManager:
                 data = json.load(f)
                 return {k: v for k, v in data.items() if not k.startswith("_")}
         except Exception as e:
-            print(f"   ⚠ Failed to load gems config: {e}")
+            console.warning(f"Failed to load gems config: {e}", indent=1)
             return {}
     
     @classmethod
@@ -116,7 +117,7 @@ class GemManager:
             with open(cls.CONFIG_FILE, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2)
         except Exception as e:
-            print(f"   ⚠ Failed to save gems config: {e}")
+            console.warning(f"Failed to save gems config: {e}", indent=1)
     
     @classmethod
     def get_id(cls, key: str) -> Optional[str]:
@@ -169,7 +170,7 @@ class GemManager:
             return gem_id
             
         except Exception as e:
-            print(f"   ✗ Failed to create gem '{key}': {e}")
+            console.error(f"Failed to create gem '{key}': {e}", indent=1)
             return None
     
     @classmethod
@@ -190,7 +191,7 @@ class GemManager:
         gem_id = cls.get_id(key)
         
         if not gem_id:
-            print(f"   ⚠ Gem '{key}' not found in config - use create instead")
+            console.warning(f"Gem '{key}' not found in config - use create instead", indent=1)
             return False
         
         try:
@@ -204,7 +205,7 @@ class GemManager:
             return True
             
         except Exception as e:
-            print(f"   ✗ Failed to update gem '{key}': {e}")
+            console.error(f"Failed to update gem '{key}': {e}", indent=1)
             return False
     
     @classmethod
@@ -222,15 +223,15 @@ class GemManager:
         gem_id = cls.get_id(key)
         
         if not gem_id:
-            print(f"   ⚠ Gem '{key}' not found in config")
+            console.warning(f"Gem '{key}' not found in config", indent=1)
             return False
         
         try:
             # Pass gem ID string directly (NO fetch_gems needed!)
             await client._client.delete_gem(gem_id)
-            print(f"   ✓ Deleted gem '{key}' from API")
+            console.success(f"Deleted gem '{key}' from API", indent=1)
         except Exception as e:
-            print(f"   ⚠ API delete failed (may already be deleted): {e}")
+            console.warning(f"API delete failed (may already be deleted): {e}", indent=1)
         
         # Remove from config regardless
         gems = cls.load_config()
@@ -314,7 +315,7 @@ class GemManager:
         
         for key, config in configs.items():
             gem_id = current.get(key)
-            print(f"  📝 Syncing '{key}'...")
+            console.status(f"Syncing '{key}'...")
             
             try:
                 if gem_id:
@@ -325,7 +326,7 @@ class GemManager:
                         prompt=config["prompt"],
                         description=config["description"]
                     )
-                    print(f"     ✓ Updated (ID: {gem_id})")
+                    console.status(f"Updated (ID: {gem_id})", done=True)
                     result[key] = gem_id
                 else:
                     # Create new
@@ -335,11 +336,11 @@ class GemManager:
                         description=config["description"]
                     )
                     new_id = new_gem.id if hasattr(new_gem, 'id') else str(new_gem)
-                    print(f"     ✓ Created (ID: {new_id})")
+                    console.status(f"Created (ID: {new_id})", done=True)
                     result[key] = new_id
                     
             except Exception as e:
-                print(f"     ✗ Failed: {e}")
+                console.error(f"Failed: {e}", indent=1)
                 if gem_id:
                     result[key] = gem_id  # Keep old ID
         
@@ -353,7 +354,7 @@ class GemManager:
         result = {}
         
         for key, config in configs.items():
-            print(f"  🔨 Creating '{key}'...")
+            console.status(f"Creating '{key}'...")
             
             try:
                 new_gem = await client._client.create_gem(
@@ -362,10 +363,10 @@ class GemManager:
                     description=config["description"]
                 )
                 new_id = new_gem.id if hasattr(new_gem, 'id') else str(new_gem)
-                print(f"     ✓ Created (ID: {new_id})")
+                console.status(f"Created (ID: {new_id})", done=True)
                 result[key] = new_id
             except Exception as e:
-                print(f"     ✗ Failed: {e}")
+                console.error(f"Failed: {e}", indent=1)
         
         cls.save_config(result)
         return result
@@ -377,14 +378,14 @@ class GemManager:
         deleted = 0
         
         for key, gem_id in list(current.items()):
-            print(f"  🗑️ Deleting '{key}'...")
+            console.status(f"Deleting '{key}'...")
             
             try:
                 await client._client.delete_gem(gem_id)
-                print(f"     ✓ Deleted")
+                console.status("Deleted", done=True)
                 deleted += 1
             except Exception as e:
-                print(f"     ✗ Failed: {e}")
+                console.error(f"Failed: {e}", indent=1)
         
         cls.save_config({})
         return deleted
@@ -394,19 +395,16 @@ class GemManager:
         """Print current gem status."""
         gems = cls.load_config()
         
-        print("\n📦 GEM STATUS")
-        print("=" * 60)
+        console.section("Gem Status")
         
         if not gems:
-            print("  No gems configured.")
-            print("  Run: python main.py --gems-sync")
+            console.warning("No gems configured.")
+            console.info("Run: python main.py --gems-sync")
         else:
-            for key, gem_id in gems.items():
-                print(f"  • {key}")
-                print(f"    ID: {gem_id}")
+            rows = [[k, v] for k, v in gems.items()]
+            console.table(["Gem Name", "Gem ID"], rows)
         
-        print("=" * 60)
-        print(f"📁 Config: {cls.CONFIG_FILE}")
+        console.debug(f"Config file: {cls.CONFIG_FILE}")
 
 
 # =========================================================

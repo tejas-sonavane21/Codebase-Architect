@@ -16,6 +16,7 @@ from pocketflow import Node
 
 from utils.gemini_client import get_client
 from utils.prompts import get_prompt, get_gem_id
+from utils.console import console
 from utils.gem_manager import update_gem
 from utils.output_cleaner import clean_json
 
@@ -159,7 +160,7 @@ Propose specific, focused diagrams that would help a developer understand this c
             return plan
             
         except json.JSONDecodeError as e:
-            print(f"      ⚠ Failed to parse {pass_name} response: {e}")
+            console.debug(f"Failed to parse {pass_name} response: {e}", indent=2)
             return {"project_summary": "", "diagrams": []}
     
     def _offset_diagram_ids(self, diagrams: List[Dict], offset: int) -> List[Dict]:
@@ -178,25 +179,25 @@ Propose specific, focused diagrams that would help a developer understand this c
         Note: Audit/deduplication is now handled by AuditNode at the end of the flow.
         """
         active_model = self.client.MODEL
-        print(f"📐 Planning architectural diagrams with {active_model}...")
-        print(f"   🎯 Using Dual-Prompt Strategy (Behavioral + Structural)")
+        console.section("PHASE 3: Architecture Planning")
+        console.info(f"Using model: {active_model}", indent=1)
         
         # =========================================================
         # PASS 1: Behavioral Analysis
         # =========================================================
-        print(f"\n   === PASS 1: Behavioral Analysis ===")
+        console.status("Running Pass 1: Behavioral Analysis...")
         behavioral_plan = self._generate_plan(prep_res, "Behavioral")
         behavioral_count = len(behavioral_plan.get("diagrams", []))
-        print(f"      ✓ Found {behavioral_count} behavioral diagrams")
+        console.status(f"Found {behavioral_count} behavioral diagrams", done=True)
         
         for d in behavioral_plan.get("diagrams", []):
-            print(f"         [{d['id']}] {d['name']} ({d['type']})")
+            console.item(f"{d['name']} ({d['type']})")
         
         # =========================================================
         # PASS 2: Structural Analysis (Dynamic Gem Update)
         # =========================================================
-        print(f"\n   === PASS 2: Structural Analysis ===")
-        print(f"      ⚙ Updating 'architect' gem to Structural mode...")
+        console.status("Running Pass 2: Structural Analysis...")
+        console.debug("Updating 'architect' gem to Structural mode...")
         
         self._update_gem_prompt("architect_overview", "STRUCTURAL-MAPPER: High-level architecture planner")
         
@@ -209,19 +210,18 @@ Propose specific, focused diagrams that would help a developer understand this c
         )
         
         structural_count = len(structural_plan.get("diagrams", []))
-        print(f"      ✓ Found {structural_count} structural diagrams")
+        console.status(f"Found {structural_count} structural diagrams", done=True)
         
         for d in structural_plan.get("diagrams", []):
-            print(f"         [{d['id']}] {d['name']} ({d['type']})")
+            console.item(f"{d['name']} ({d['type']})")
         
         # Restore original prompt
-        print(f"      ⚙ Restoring 'architect' gem to Behavioral mode...")
+        console.debug("Restoring 'architect' gem to Behavioral mode...")
         self._update_gem_prompt("architect", "DIAGRAM-STRATEGIST: Strategic diagram planner")
         
         # =========================================================
         # MERGE: Combine all diagrams (Audit happens later in AuditNode)
         # =========================================================
-        print(f"\n   === Merging Diagram Plans ===")
         all_diagrams = behavioral_plan.get("diagrams", []) + structural_plan.get("diagrams", [])
         
         # Renumber IDs sequentially
@@ -233,9 +233,7 @@ Propose specific, focused diagrams that would help a developer understand this c
             "diagrams": all_diagrams
         }
         
-        print(f"\n   ✓ Combined plan: {len(all_diagrams)} diagrams (audit pending)")
-        for d in all_diagrams:
-            print(f"      [{d['id']}] {d['name']} ({d['type']})")
+        console.success(f"Combined Plan: {len(all_diagrams)} diagrams (audit pending)")
         
         return final_plan
     
@@ -250,5 +248,5 @@ Propose specific, focused diagrams that would help a developer understand this c
         with open(plan_file, "w", encoding="utf-8") as f:
             json.dump(exec_res, f, indent=2)
         
-        print(f"📄 Diagram plan saved to: {plan_file}")
+        console.debug(f"Plan saved: {plan_file}")
         return "default"

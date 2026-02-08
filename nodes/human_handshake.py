@@ -7,6 +7,7 @@ and lets the user select which diagrams to generate.
 
 from typing import List
 from pocketflow import Node
+from utils.console import console
 
 
 class HumanHandshakeNode(Node):
@@ -28,7 +29,7 @@ class HumanHandshakeNode(Node):
         diagrams = plan.get("diagrams", [])
         
         if not diagrams:
-            print("   ⚠ No diagrams in plan!")
+            console.warning("No diagrams in plan!", indent=1)
             return []
         
         return diagrams
@@ -46,16 +47,15 @@ class HumanHandshakeNode(Node):
             return []
         
         # Display the diagram plan
-        print("\n" + "="*60)
-        print("📊 PROPOSED ARCHITECTURAL DIAGRAMS")
-        print("="*60 + "\n")
+        console.section("Proposed Architectural Diagrams")
         
         for diagram in prep_res:
             complexity_emoji = {"low": "🟢", "medium": "🟡", "high": "🔴"}.get(
                 diagram.get("complexity", "medium"), "⚪"
             )
             
-            print(f"  [{diagram['id']}] {diagram['name']}")
+            console.item(f"[{diagram['id']}] {diagram['name']}", indent=1)
+            # console.info(f"Type: {diagram['type'].upper()}", indent=3) # Optional detail
             print(f"      Type: {diagram['type'].upper()}")
             print(f"      Focus: {diagram['focus']}")
             print(f"      Complexity: {complexity_emoji} {diagram.get('complexity', 'unknown')}")
@@ -63,49 +63,50 @@ class HumanHandshakeNode(Node):
                 print(f"      Files: {', '.join(diagram['files'][:3])}...")
             print()
         
-        print("="*60)
-        print("Options:")
+        console.blank()
+        print("OPTIONS:")
         print("  • Enter diagram IDs separated by commas (e.g., 1,3,5)")
         print("  • Enter 'all' or 'a' to generate all diagrams")
         print("  • Enter 'quit' or 'q' to cancel")
-        print("="*60)
+        console.blank()
         
         # Get user input
         while True:
             try:
-                user_input = input("\n🎯 Select diagrams to generate: ").strip().lower()
+                user_input = input("🎯 Select diagrams to generate: ").strip().lower()
                 
                 if user_input in ("quit", "q", "exit"):
-                    print("   Cancelled by user.")
+                    console.warning("Cancelled by user.", indent=1)
                     return []
                 
                 if user_input in ("all", "a", "*"):
-                    print(f"   ✓ Selected all {len(prep_res)} diagrams")
+                    console.success(f"Selected all {len(prep_res)} diagrams", indent=1)
                     return prep_res
                 
                 # Parse comma-separated IDs
                 try:
                     selected_ids = [int(x.strip()) for x in user_input.split(",")]
                 except ValueError:
-                    print("   ⚠ Invalid input. Enter numbers separated by commas.")
+                    console.warning("Invalid input. Enter numbers separated by commas.", indent=1)
                     continue
                 
                 # Filter diagrams
                 selected = [d for d in prep_res if d["id"] in selected_ids]
                 
                 if not selected:
-                    print(f"   ⚠ No matching diagrams. Valid IDs: {[d['id'] for d in prep_res]}")
+                    valid_ids = [d['id'] for d in prep_res]
+                    console.warning(f"No matching diagrams. Valid IDs: {valid_ids}", indent=1)
                     continue
                 
-                print(f"   ✓ Selected {len(selected)} diagram(s)")
+                console.success(f"Selected {len(selected)} diagram(s)", indent=1)
                 return selected
                 
             except EOFError:
                 # Handle non-interactive mode
-                print("   Non-interactive mode: selecting all diagrams")
+                console.warning("Non-interactive mode: selecting all diagrams", indent=1)
                 return prep_res
             except KeyboardInterrupt:
-                print("\n   Cancelled by user.")
+                console.warning("Cancelled by user.", indent=1)
                 return []
     
     def post(self, shared: dict, prep_res: list, exec_res: List[dict]) -> str:
@@ -127,6 +128,9 @@ class HumanHandshakeNode(Node):
         shared["current_diagram_index"] = 0
         shared["generated_diagrams"] = []
         
-        print(f"\n▶ Starting generation of {len(exec_res)} diagram(s)...\n")
+        shared["generated_diagrams"] = []
+        
+        console.section("PHASE 4: Diagram Generation")
+        console.info(f"Queue: {len(exec_res)} diagram(s)", indent=1)
         
         return "default"

@@ -14,6 +14,7 @@ from typing import Optional, Dict, List
 from pocketflow import Node
 
 from utils.security import redact_file_content
+from utils.console import console
 
 
 class ScoutNode(Node):
@@ -66,7 +67,7 @@ class ScoutNode(Node):
         
         # Clean up existing clone if present
         if os.path.exists(self.clone_dir):
-            print(f"🧹 Removing previous clone at: {self.clone_dir}")
+            console.debug(f"Removing previous clone: {self.clone_dir}")
             # Handle Windows .git read-only files
             def remove_readonly(func, path, excinfo):
                 import stat
@@ -77,12 +78,12 @@ class ScoutNode(Node):
         os.makedirs(self.clone_dir, exist_ok=True)
         clone_path = os.path.join(self.clone_dir, "repo")
         
-        print(f"📥 Cloning repository: {repo_url}")
-        print(f"   Destination: {clone_path}")
+        console.status(f"Cloning repository")
+        console.debug(f"URL: {repo_url}")
         
         try:
             git.Repo.clone_from(repo_url, clone_path, depth=1)
-            print("   ✓ Clone complete")
+            console.status("Repository cloned", done=True)
         except Exception as e:
             shutil.rmtree(self.clone_dir, ignore_errors=True)
             raise RuntimeError(f"Failed to clone repository: {e}")
@@ -100,7 +101,8 @@ class ScoutNode(Node):
         """
         clone_path = prep_res["clone_path"]
         
-        print("🔍 Scanning COMPLETE project structure...")
+        console.section("PHASE 1: Project Analysis")
+        console.status("Scanning project structure")
         
         # Create both a readable map AND a structured inventory
         map_lines = []
@@ -121,9 +123,10 @@ class ScoutNode(Node):
         binary_files = [f for f in file_inventory if f["type"] == "binary"]
         collapsed_dirs = [f for f in file_inventory if f["type"] == "collapsed_dir"]
         
-        print(f"   ✓ Found {len(text_files)} text files")
-        print(f"   ✓ Found {len(binary_files)} binary files (skipped)")
-        print(f"   ✓ Collapsed {len(collapsed_dirs)} junk directories")
+        console.status("Scan complete", done=True)
+        console.item(f"{len(text_files)} text files")
+        console.item(f"{len(binary_files)} binary (skipped)")
+        console.item(f"{len(collapsed_dirs)} junk dirs collapsed")
         
         return {
             "project_map": project_map,
@@ -264,8 +267,8 @@ class ScoutNode(Node):
             }, f, indent=2)
         shared["inventory_file"] = inventory_file
         
-        print(f"📄 Project map saved to: {map_file}")
-        print(f"📄 File inventory saved to: {inventory_file}")
+        console.debug(f"Project map saved: {map_file}")
+        console.debug(f"Inventory saved: {inventory_file}")
         
         return "default"
     
@@ -285,7 +288,7 @@ class ScoutNode(Node):
             
             try:
                 shutil.rmtree(clone_dir, onerror=remove_readonly)
-                print("🧹 Cleaned up cloned repository")
+                console.debug("Cleaned up cloned repository")
             except Exception as e:
-                print(f"⚠ Cleanup warning: {e}")
+                console.debug(f"Cleanup warning: {e}")
 

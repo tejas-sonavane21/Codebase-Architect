@@ -10,6 +10,7 @@ from typing import List, Optional, Dict
 from pathlib import Path
 from pocketflow import Node
 
+from utils.console import console
 from utils.gemini_client import get_client
 from utils.security import redact_file_content
 
@@ -125,7 +126,9 @@ class UploaderNode(Node):
                         })
         
         total_files = len(context_files) + len(source_files)
-        print(f"📦 Preparing {total_files} files ({skipped_binary} binary files skipped)")
+        console.status(f"Preparing {total_files} files", done=True)
+        if skipped_binary > 0:
+            console.item(f"Skipped {skipped_binary} binary files", indent=2)
         
         return {
             "context_files": context_files,
@@ -164,7 +167,7 @@ class UploaderNode(Node):
                 "is_context": False,
             })
         
-        print(f"   ✓ Prepared {len(file_uris)} file references")
+        console.item(f"Prepared {len(file_uris)} file references", indent=1)
         
         return {
             "file_uris": file_uris,
@@ -192,5 +195,5 @@ class UploaderNode(Node):
         # Store analysis
         shared["project_analysis"] = exec_res.get("analysis", "")
         
-        print(f"✓ {len(file_uris)} files ready for processing")
+        console.status(f"{len(file_uris)} files ready for processing", done=True)
         return "default"

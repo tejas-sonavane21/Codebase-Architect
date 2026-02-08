@@ -14,6 +14,7 @@ from utils.gemini_client import get_client
 from utils.prompts import get_prompt, get_gem_id
 from utils.output_cleaner import clean_xml
 from utils.response_supervisor import ResponseSupervisor
+from utils.console import console
 
 
 # Threshold for keeping full content vs summarizing
@@ -144,7 +145,7 @@ Return the COMPLETE updated XML code with the new file entries added."""
         try:
             initial_response = generate_with_critique("")
         except Exception as e:
-            print(f"      ⚠ Initial generation failed: {str(e)[:100]}")
+            console.warning(f"Initial generation failed: {str(e)[:100]}", indent=2)
             return current_xml, False
         
         # Use supervisor with optimized flow (local validation first)
@@ -196,7 +197,7 @@ Return the COMPLETE updated XML."""
         try:
             initial_response = generate_with_critique("")
         except Exception as e:
-            print(f"   ⚠ Pass 2 initial generation failed: {str(e)[:100]}")
+            console.warning(f"Pass 2 initial generation failed: {str(e)[:100]}", indent=2)
             return current_xml
         
         # Use supervisor with optimized flow (local validation first)
@@ -243,13 +244,17 @@ Return the COMPLETE updated XML."""
         analysis = prep_res["analysis"]
         
         project_name = os.path.basename(clone_path)
-        print(f"📝 Summarizing {len(source_files)} files into knowledge base...")
+        
+        console.section("PHASE 2: Knowledge Base Construction")
+        console.info(f"Summarizing {len(source_files)} files into knowledge base...", indent=1)
         
         self.knowledge_xml = self._build_initial_xml(project_name, analysis)
         
         sorted_files = self._sort_files_by_dependency(source_files)
+        total_files = len(sorted_files)
+        total_batches = (total_files + BATCH_SIZE - 1) // BATCH_SIZE
         
-        print(f"   📊 Pass 1: Processing files in {(len(sorted_files) + BATCH_SIZE - 1) // BATCH_SIZE} batches...")
+        # console.status(f"Pass 1: Processing files in {(len(sorted_files) + BATCH_SIZE - 1) // BATCH_SIZE} batches...", done=True)
         
         processed = 0
         failed = 0
@@ -257,10 +262,14 @@ Return the COMPLETE updated XML."""
         for batch_start in range(0, len(sorted_files), BATCH_SIZE):
             batch = sorted_files[batch_start:batch_start + BATCH_SIZE]
             batch_num = (batch_start // BATCH_SIZE) + 1
-            total_batches = (len(sorted_files) + BATCH_SIZE - 1) // BATCH_SIZE
+            # total_batches calculated above
             
+            # Update progress bar
+            console.progress("Processing batches", batch_num, total_batches)
+            
+            # Print details only in verbose mode
             file_names = [f.get("path", "?")[-30:] for f in batch]
-            print(f"      Batch {batch_num}/{total_batches}: {', '.join(file_names)}")
+            console.debug(f"Batch {batch_num}: {', '.join(file_names)}")
             
             updated_xml, success = self._process_batch(batch, self.knowledge_xml, clone_path)
             
@@ -270,19 +279,19 @@ Return the COMPLETE updated XML."""
             else:
                 failed += len(batch)
         
-        print(f"   ✓ Pass 1 complete: {processed} files processed, {failed} failed")
+        console.success(f"Pass 1 complete: {processed} files processed, {failed} failed", indent=1)
         
         # Pass 2: Identify relationships
-        print(f"   🔗 Pass 2: Detecting cross-file relationships...")
+        console.status("Pass 2: Detecting cross-file relationships...", done=True)
         self.knowledge_xml = self._add_relationships(self.knowledge_xml)
-        print(f"   ✓ Pass 2 complete: Relationships identified")
+        console.success("Pass 2 complete: Relationships identified", indent=1)
         
         # Save knowledge XML
         knowledge_file = os.path.join(os.path.dirname(clone_path), "codebase_knowledge.xml")
         with open(knowledge_file, "w", encoding="utf-8") as f:
             f.write(self.knowledge_xml)
         
-        print(f"📄 Codebase knowledge saved to: {knowledge_file}")
+        console.info(f"Codebase knowledge saved to: {knowledge_file}", indent=1)
         
         return {
             "knowledge_xml": self.knowledge_xml,

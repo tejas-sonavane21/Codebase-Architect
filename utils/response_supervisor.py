@@ -14,6 +14,7 @@ from typing import Dict, Optional, Callable, Any
 
 from utils.prompts import get_prompt, get_gem_id
 from utils.output_cleaner import clean_json
+from utils.console import console
 
 
 class ResponseSupervisor:
@@ -206,31 +207,31 @@ If the response is valid, return: {{"is_valid": true, "issues": [], "critique": 
             is_valid, local_error = self.local_validate_xml(current_response, context)
             
             if is_valid:
-                print(f"      ✓ Local validation passed (attempt {attempt})")
+                console.debug(f"Validation passed (attempt {attempt})", indent=2)
                 return current_response, True
             
-            print(f"      ⚠ Local validation failed: {local_error[:80]}")
+            console.debug(f"Validation failed: {local_error[:60]}...", indent=2)
             
             # Local failed → call Supervisor LLM for semantic analysis
-            print(f"      🔍 Supervisor LLM: Analyzing failure...")
+            console.debug("Supervisor analyzing failure...", indent=2)
             analysis = self._call_supervisor(current_response, context, local_error)
             
             # Get critique from LLM
             last_critique = analysis.get("critique", f"Fix error: {local_error}")
             issues = analysis.get("issues", [])
             for issue in issues[:2]:
-                print(f"      📝 Issue: {issue[:60]}...")
+                console.debug(f"Issue: {issue[:50]}...", indent=2)
             
             if attempt < self.max_retries:
-                print(f"      🔄 Retrying with Supervisor feedback (attempt {attempt + 1})...")
+                console.debug(f"Retrying ({attempt + 1}/{self.max_retries})...", indent=2)
                 try:
                     # Generate new response with critique
                     current_response = generate_with_critique_fn(last_critique)
                 except Exception as e:
-                    print(f"      ⚠ Retry generation failed: {str(e)[:80]}")
+                    console.debug(f"Retry failed: {str(e)[:60]}", indent=2)
                     continue
         
         # Max retries exhausted
-        print(f"      ✗ Supervisor: Max retries ({self.max_retries}) exhausted")
+        console.warning(f"Supervisor: Max retries ({self.max_retries}) exhausted", indent=2)
         return current_response, False
 

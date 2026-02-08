@@ -7,6 +7,7 @@ with conditional transitions and self-correction loops.
 
 from pocketflow import Flow
 
+from utils.console import console
 from nodes.scout import ScoutNode
 from nodes.surveyor import SurveyorNode
 from nodes.uploader import UploaderNode
@@ -116,12 +117,10 @@ def run_flow(repo_url: str, output_dir: str = "generated_diagrams") -> dict:
         "project_root": project_root,
     }
     
-    print("\n" + "="*60)
-    print("🎨 BLACK-BOOK DIAGRAM GENERATOR")
-    print("="*60)
-    print(f"Repository: {repo_url}")
-    print(f"Output: {output_dir}/")
-    print("="*60 + "\n")
+    console.header("CODEBASE ARCHITECT")
+    console.info(f"Repository: {repo_url}")
+    console.info(f"Output: {output_dir}/")
+    console.blank()
     
     try:
         # Run the flow
@@ -130,19 +129,15 @@ def run_flow(repo_url: str, output_dir: str = "generated_diagrams") -> dict:
         # Collect results
         generated = shared.get("generated_diagrams", [])
         
-        print("\n" + "="*60)
-        print("📊 GENERATION COMPLETE")
-        print("="*60)
+        console.section("Generation Complete")
         
         if generated:
-            print(f"\n✓ Generated {len(generated)} diagram(s):\n")
+            console.success(f"Generated {len(generated)} diagram(s):", indent=1)
             for diag in generated:
-                print(f"  • {diag['name']}")
-                print(f"    PNG: {diag['png_path']}")
-                print(f"    Source: {diag['puml_path']}")
-                print()
+                console.item(f"{diag['name']}", indent=2)
+                console.item(f"PNG: {diag['png_path']}", indent=3)
         else:
-            print("\n⚠ No diagrams were generated.")
+            console.warning("No diagrams were generated.", indent=1)
         
         # Cleanup temp files
         scout_node = ScoutNode()
@@ -155,7 +150,7 @@ def run_flow(repo_url: str, output_dir: str = "generated_diagrams") -> dict:
         }
         
     except Exception as e:
-        print(f"\n✗ Error during flow execution: {e}")
+        console.error(f"Error during flow execution: {e}")
         
         # Attempt cleanup
         try:

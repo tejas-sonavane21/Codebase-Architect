@@ -13,6 +13,7 @@ from utils.prompts import get_prompt, get_gem_id
 from utils.diagram_rules import get_diagram_rules
 from utils.gem_manager import update_gem
 from utils.output_cleaner import clean_plantuml
+from utils.console import console
 
 
 MAX_RETRIES = 5  # Maximum retries per diagram
@@ -40,6 +41,8 @@ class DrafterNode(Node):
         self.client = get_client()
         
         return {
+            "current_index": current_idx,
+            "total_diagrams": len(queue),
             "done": False,
             "diagram": current_diagram,
             "retry_count": retry_count,
@@ -62,9 +65,9 @@ class DrafterNode(Node):
         active_model = self.client.MODEL
         
         if retry_count > 0:
-            print(f"🔄 Retry {retry_count}/{MAX_RETRIES} for: {diagram_name} (Model: {active_model})")
+            console.debug(f"Retry {retry_count}/{MAX_RETRIES} for: {diagram_name}")
         else:
-            print(f"✏️  Drafting: {diagram_name} [{complexity}] (Model: {active_model})")
+            console.step(prep_res["current_index"] + 1, prep_res["total_diagrams"], f"Drafting: {diagram_name} [{complexity}]")
         
         # ---------------------------------------------------------
         # Dynamic Gem Update (only if diagram type changed)
@@ -76,7 +79,7 @@ class DrafterNode(Node):
             last_type = self.client.__dict__.get("_last_drafter_type")
             
             if last_type != diagram_type:
-                print(f"   ⚙ Updating 'drafter' gem rules for: {diagram_type}...")
+                console.debug(f"Updating drafter gem rules for: {diagram_type}")
                 
                 # Get base prompt and specific rules
                 base_prompt = get_prompt("drafter", active_model)
@@ -137,7 +140,7 @@ class DrafterNode(Node):
         )
         
         code = clean_plantuml(response)
-        print(f"   ✓ Generated {len(code.split(chr(10)))} lines of PlantUML")
+        console.debug(f"Generated {len(code.split(chr(10)))} lines of PlantUML")
         
         return code
     

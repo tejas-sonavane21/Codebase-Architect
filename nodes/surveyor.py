@@ -12,6 +12,7 @@ from pocketflow import Node
 from utils.gemini_client import get_client
 from utils.prompts import get_prompt, get_gem_id
 from utils.output_cleaner import clean_json
+from utils.console import console
 
 
 class SurveyorNode(Node):
@@ -33,7 +34,7 @@ class SurveyorNode(Node):
     def exec(self, prep_res: str) -> dict:
         """Analyze project map with Gemini."""
         active_model = self.client.MODEL
-        print(f"🔬 Analyzing project structure with {active_model}...")
+        console.status(f"Analyzing project structure ({active_model})")
         
         base_prompt = f"""Analyze this project structure and identify ALL the important source files that are needed to understand the architecture:
 
@@ -53,7 +54,7 @@ Return paths that would be needed to understand the system architecture and gene
             if attempt == 0:
                 prompt = base_prompt
             else:
-                print(f"   🔄 Retry {attempt}/{max_parse_retries - 1}: Requesting properly formatted JSON...")
+                console.debug(f"Retry {attempt}/{max_parse_retries - 1}: Requesting JSON...", indent=1)
                 prompt = f"""Your previous response was not valid JSON. Error: {last_error}
 
 {base_prompt}
@@ -83,19 +84,20 @@ Example format:
                 if "analysis" not in config:
                     config["analysis"] = "Unknown project type"
                 
-                print(f"   ✓ Analysis: {config['analysis']}")
-                print(f"   ✓ Selected {len(config['include_paths'])} paths for upload")
+                console.status("Analysis complete", done=True)
+                console.item(f"Type: {config['analysis']}")
+                console.item(f"Selected {len(config['include_paths'])} paths")
                 
                 return config
                 
             except json.JSONDecodeError as e:
                 last_error = str(e)
-                print(f"   ⚠ Failed to parse JSON (attempt {attempt + 1}/{max_parse_retries}): {e}")
+                console.debug(f"JSON parse failed (attempt {attempt + 1}/{max_parse_retries}): {e}", indent=1)
                 if attempt < max_parse_retries - 1:
-                    print(f"   Raw response preview: {response[:300]}...")
+                    console.debug(f"Response preview: {response[:200]}...", indent=1)
         
         # All retries exhausted
-        print(f"\n❌ CRITICAL ERROR: Failed to get valid JSON response after {max_parse_retries} attempts.")
+        console.error(f"Failed to get valid JSON after {max_parse_retries} attempts")
         raise RuntimeError(f"Surveyor failed: Could not parse Gemini response. Last error: {last_error}")
     
     def post(self, shared: dict, prep_res: str, exec_res: dict) -> str:
@@ -111,5 +113,5 @@ Example format:
         with open(config_file, "w", encoding="utf-8") as f:
             json.dump(exec_res, f, indent=2)
         
-        print(f"📄 Upload config saved to: {config_file}")
+        console.debug(f"Config saved: {config_file}")
         return "default"

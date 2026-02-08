@@ -16,6 +16,15 @@ import asyncio
 from pathlib import Path
 from typing import Optional, List
 from dotenv import load_dotenv
+from gemini_webapi import GeminiClient as WebClient
+from utils.console import console
+
+try:
+    from loguru import logger
+    logger.remove()
+except ImportError:
+    pass
+
 
 # Load environment variables
 load_dotenv()
@@ -75,9 +84,7 @@ class GeminiClient:
         if self._initialized:
             return
         
-        from gemini_webapi import GeminiClient as WebClient
-        
-        print("🌐 Initializing Gemini client...")
+        console.status("Initializing Gemini client")
         
         # Correct initialization pattern:
         # 1. Create client with cookies
@@ -94,7 +101,7 @@ class GeminiClient:
         )
         
         self._initialized = True
-        print("✓ Gemini client initialized")
+        console.status("Gemini client initialized", done=True)
     
     def _apply_safety_delay(self):
         """Apply safety delay between requests."""
@@ -102,7 +109,7 @@ class GeminiClient:
             elapsed = time.time() - self._last_request_time
             if elapsed < self.SAFETY_DELAY:
                 wait_time = self.SAFETY_DELAY - elapsed
-                print(f"   ⏳ Safety delay: {wait_time:.1f}s...")
+                # Silent delay - no need to inform user about internal throttling
                 time.sleep(wait_time)
     
     def _get_or_create_loop(self):
@@ -173,7 +180,8 @@ class GeminiClient:
                     raise RuntimeError(f"Gemini API failed after {self.MAX_RETRIES} retries: {e}")
                 
                 wait_time = self.BASE_WAIT * (2 ** attempt)
-                print(f"  ⚠ API error: {e}. Retrying in {wait_time}s...")
+                from utils.console import console
+                console.debug(f"API error: {e}. Retrying in {wait_time}s...")
                 await asyncio.sleep(wait_time)
         
         return ""

@@ -21,6 +21,7 @@ from pocketflow import Node
 from utils.gemini_client import get_client
 from utils.prompts import get_prompt, get_gem_id
 from utils.output_cleaner import clean_json
+from utils.console import console
 
 
 class AuditNode(Node):
@@ -109,7 +110,7 @@ class AuditNode(Node):
         diagrams = diagram_plan.get("diagrams", [])
         
         if len(diagrams) <= 1:
-            print("      ℹ Only 1 diagram, skipping Phase 1")
+            console.info("Only 1 diagram, skipping Phase 1")
             return []
         
         prompt = f"""Analyze this list of proposed diagrams and identify POTENTIAL DUPLICATES.
@@ -148,15 +149,15 @@ If no duplicates found, return: {{"drop_ids": [], "reasoning": []}}"""
             result = json.loads(clean_response)
             
             candidates = result.get("reasoning", [])
-            print(f"      ✓ Phase 1: Found {len(candidates)} potential duplicate pairs")
+            console.status(f"Phase 1: Found {len(candidates)} potential duplicates", done=True)
             
             for c in candidates:
-                print(f"         ⚠ Candidate: Drop {c.get('dropped')} vs Keep {c.get('kept')}")
+                console.warning(f"Candidate: Drop {c.get('dropped')} vs Keep {c.get('kept')}", indent=2)
             
             return candidates
             
         except json.JSONDecodeError as e:
-            print(f"      ⚠ Phase 1 parse error: {e}")
+            console.debug(f"Phase 1 parse error: {e}", indent=2)
             return []
     
     def _phase2_content_audit(
@@ -182,7 +183,7 @@ If no duplicates found, return: {{"drop_ids": [], "reasoning": []}}"""
             kept_diagram = diagrams.get(kept_id)
             
             if not dropped_diagram or not kept_diagram:
-                print(f"      ⚠ Skipping pair ({dropped_id}, {kept_id}): Diagram info not found in plan")
+                console.warning(f"Skipping pair ({dropped_id}, {kept_id}): Diagram info not found", indent=2)
                 verified.append({
                     "dropped_id": dropped_id,
                     "kept_id": kept_id,
@@ -196,7 +197,7 @@ If no duplicates found, return: {{"drop_ids": [], "reasoning": []}}"""
             kept_file = self._find_diagram_file(kept_diagram["name"], output_dir)
             
             if not dropped_file:
-                print(f"      ⚠ Skipping pair: '{dropped_diagram['name']}' not found (generation may have failed)")
+                console.warning(f"Skipping: '{dropped_diagram['name']}' not found", indent=2)
                 verified.append({
                     "dropped_id": dropped_id,
                     "kept_id": kept_id,
@@ -206,7 +207,7 @@ If no duplicates found, return: {{"drop_ids": [], "reasoning": []}}"""
                 continue
             
             if not kept_file:
-                print(f"      ⚠ Skipping pair: '{kept_diagram['name']}' not found (generation may have failed)")
+                console.warning(f"Skipping: '{kept_diagram['name']}' not found", indent=2)
                 verified.append({
                     "dropped_id": dropped_id,
                     "kept_id": kept_id,
@@ -310,7 +311,7 @@ Return JSON:
             else:
                 status = "DROP_A"  # Original plan was right
             
-            print(f"      🔍 Pair ({dropped_id} vs {kept_id}): {status} (confidence: {confidence})")
+            console.debug(f"Pair ({dropped_id} vs {kept_id}): {status} (confidence: {confidence})", indent=2)
             
             return {
                 "dropped_id": dropped_id,
@@ -323,7 +324,7 @@ Return JSON:
             }
             
         except json.JSONDecodeError as e:
-            print(f"      ⚠ Content comparison parse error: {e}")
+            console.debug(f"Content comparison parse error: {e}", indent=2)
             return {
                 "dropped_id": dropped_id,
                 "kept_id": kept_id,
@@ -368,7 +369,7 @@ Return JSON:
         dest = os.path.join(self.deprecated_dir, basename)
         
         shutil.move(file_path, dest)
-        print(f"         📁 Moved: {basename} -> _deprecated/")
+        console.item(f"Moved to deprecated: {basename}", indent=3)
         
         # Also move PNG if exists
         png_path = file_path.replace(".puml", ".png")
@@ -434,27 +435,27 @@ Return JSON:
         diagram_plan = prep_res.get("diagram_plan", {})
         output_dir = prep_res.get("output_dir")
         
-        print(f"\n🔍 Running Post-Generation Audit...")
+        console.section("Post-Generation Audit")
         
         # Phase 1: Plan-based analysis
-        print(f"\n   === Phase 1: Plan Audit ===")
+        console.status("Running Phase 1: Plan Audit...")
         candidates = self._phase1_plan_audit(diagram_plan)
         
         if not candidates:
-            print(f"      ✓ No potential duplicates found. All diagrams kept.")
+            console.status("No potential duplicates found", done=True)
             return {"decisions": [], "moved": 0, "kept": 0}
         
         # Phase 2: Content-based verification
-        print(f"\n   === Phase 2: Content Audit ===")
+        console.status("Running Phase 2: Content Audit...")
         decisions = self._phase2_content_audit(candidates, diagram_plan, output_dir)
         
         # Execute decisions
-        print(f"\n   === Executing Decisions ===")
+        console.status("Executing Decisions...")
         moved, kept = self._execute_decisions(decisions)
         
         # Generate report
         report_path = self._generate_report(decisions, moved, kept)
-        print(f"\n   📄 Audit report saved to: {report_path}")
+        console.debug(f"Audit report saved: {report_path}")
         
         return {"decisions": decisions, "moved": moved, "kept": kept}
     
@@ -465,6 +466,6 @@ Return JSON:
         moved = exec_res.get("moved", 0)
         kept = exec_res.get("kept", 0)
         
-        print(f"\n✓ Audit complete: {moved} deprecated, {kept} kept")
+        console.success(f"Audit Complete: {moved} deprecated, {kept} kept")
         
         return "default"  # End of flow

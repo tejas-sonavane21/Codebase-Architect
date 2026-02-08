@@ -25,10 +25,12 @@ import argparse
 import asyncio
 import os
 import sys
+import os
 from pathlib import Path
 from dotenv import load_dotenv
 from utils.gemini_client import get_client
 from utils.gem_manager import GemManager
+from utils.console import console
 
 # Ensure parent directory is in path for imports
 sys.path.insert(0, str(Path(__file__).parent))
@@ -224,6 +226,10 @@ The tool will:
     
     args = parser.parse_args()
     
+    # Set console verbosity
+    if args.verbose:
+        console.set_verbosity(console.VERBOSE)
+    
     # Handle gem management commands (dev mode only)
     if is_dev_mode():
         if args.gems_list:
@@ -255,8 +261,8 @@ The tool will:
     
     # Validate inputs
     if not validate_repo_url(repo_url):
-        print(f"✗ Error: Invalid GitHub URL: {args.repo_url}")
-        print("  Expected format: https://github.com/user/repo")
+        console.error(f"Invalid GitHub URL: {args.repo_url}")
+        console.info("Expected format: https://github.com/user/repo")
         sys.exit(1)
     
     # Check environment
@@ -277,22 +283,22 @@ The tool will:
         )
         
         if result["success"]:
-            print(f"\n✓ Diagrams saved to: {output_dir}")
+            console.success(f"Diagrams saved to: {output_dir}")
             sys.exit(0)
         else:
-            print(f"\n✗ Generation failed: {result.get('error', 'Unknown error')}")
+            console.error(f"Generation failed: {result.get('error', 'Unknown error')}")
             sys.exit(1)
             
     except KeyboardInterrupt:
-        print("\n\n⚠ Interrupted by user")
+        console.warning("Interrupted by user")
         sys.exit(130)
     except ImportError as e:
-        print(f"\n✗ Import error: {e}")
-        print("  Make sure all dependencies are installed:")
-        print("  pip install -r requirements.txt")
+        console.error(f"Import error: {e}")
+        console.info("Make sure all dependencies are installed:")
+        console.info("pip install -r requirements.txt")
         sys.exit(1)
     except Exception as e:
-        print(f"\n✗ Unexpected error: {e}")
+        console.error(f"Unexpected error: {e}")
         if args.verbose:
             import traceback
             traceback.print_exc()
