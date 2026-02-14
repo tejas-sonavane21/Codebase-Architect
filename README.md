@@ -1,38 +1,64 @@
-# 🏯 Codebase Architect - Autonomous Diagram Generator
+# 🛡️ Codebase-Architect: Automated Whitebox Reconnaissance & Threat Modeling
 
-**An Agentic AI System** that reads code, understands architecture, and drafts professional PlantUML diagrams. Powered by Google Gemini 2.5 Flash, PocketFlow, and a dual-natured Architect agent.
+> **"Enumeration is 90% of the battle. Visualize the attack surface before you audit it."**
+
+**Codebase-Architect** is an automated **Whitebox Reconnaissance & Architecture Mapping utility** powered by **Google Gemini 3.0 Pro**, **PocketFlow**, and a **Dual-Natured Architect Agent**. It is designed to accelerate the "Mapping" phase of Source Code Reviews, Penetration Tests, and Threat Modeling sessions.
+
+By leveraging Large Language Models (LLMs) with a Map-Reduce architecture, Codebase-Architect ingests complex repositories, distills their logic, and generates strict architectural diagrams (PlantUML). This allows security researchers to instantly visualize data flows, trust boundaries, and component interactions without spending hours manually tracing code.
 
 ![Banner](https://img.shields.io/badge/Status-Operational-green) ![Python](https://img.shields.io/badge/Python-3.11%2B-blue) ![License](https://img.shields.io/badge/License-MIT-purple)
 
-## 🌟 Core Features
+---
 
-- **🔍 Intelligent Scouting**: Maps project structure, filtering noise and collapsing junk directories.
-- **📚 Context Distillation**: Distills thousands of lines of code into a semantic knowledge base (`xml`) using a Map-Reduce approach with **Supervisor** validation.
-- **🧠 Dual-Natured Architect**: A specialized agent that switches between "Structural" and "Behavioral" mindsets to plan complex diagrams.
-- **🛡️ Audit & Supervision**: 
-  - **ResponseSupervisor**: Validates LLM outputs (XML/JSON) in real-time during generation.
-  - **AuditNode**: Post-generation critic that visually compares generated diagrams against the original code plan.
-- **📝 Automated Drafting**: Generates strict, syntax-correct PlantUML code.
-- **🎨 Modern CLI**: Rich terminal output with dynamic progress bars, spinners, and ANSI colors.
+## 🚀 Mission: Why this tool?
+
+In complex **Whitebox Assessments** and **Secure Code Reviews**, auditors often struggle with "analysis paralysis" when facing large, unfamiliar codebases. Identifying logic vulnerabilities (Business Logic Errors, Race Conditions, Insecure Data Flows) requires a high-level mental model of the system.
+
+**Codebase-Architect** bridges the gap between raw code and architectural understanding, enabling pentesters to:
+* **Rapidly Onboard**: Instantly understand the architecture of legacy or complex targets.
+* **Visualize Attack Surfaces**: Map entry points, API routes, and untrusted data flows.
+* **Identify Design Flaws**: Focus on Architecture Analysis rather than just syntax errors.
+* **Automate Threat Modeling**: Generate DFDs (Data Flow Diagrams) to identify STRIDE threats.
 
 ---
 
-## 🏗️ Architecture (PocketFlow)
+## ⚡ Key Capabilities
 
-The system operates as a Directed Acyclic Graph (DAG) of specialized nodes:
+### 🔍 Automated Attack Surface Discovery
+Instead of blindly scanning files, the **Surveyor Node** intelligently scans the project structure to identify high-value targets (Controllers, API endpoints, Auth middleware) versus noise (assets, configs), ensuring the analysis focuses on the logical core.
 
-1.  **Scout**: Clones the repo and builds a file map.
-2.  **Surveyor**: "Interviews" the codebase to select the most relevant 50-100 files for analysis.
-3.  **Uploader**: Uploads files to Gemini 1.5 Pro's context window (via Files API).
-4.  **Summarizer**: Builds `codebase_knowledge.xml`.
-    *   *Innovation*: Uses `generate_with_critique` loops to ensure valid XML.
-5.  **Architect**: Plans the diagram suite.
-    *   *Pass 1*: Structural Analysis (Classes, Components).
-    *   *Pass 2*: Behavioral Analysis (Sequences, Activities).
-    *   *Pass 3*: Deduplication & Feasibility Check.
-6.  **Human Handshake**: Interactive menu for the user to select which diagrams to draft.
-7.  **Drafter**: Writes the PlantUML code.
-8.  **Audit**: (Optional) Reviews the final artifacts for hallucinations.
+### ⚗️ Context Distillation (Map-Reduce)
+Large codebases break standard LLM context windows. Codebase-Architect employs a **Map-Reduce "Summarizer"** to process files in batches. It distills thousands of lines of code into a semantic `codebase_knowledge.xml`—essentially creating a "cliff notes" version of the target's logic for the auditing agent.  A built-in **ResponseSupervisor** validates every LLM output (XML/JSON) in real-time, ensuring structural integrity before the data propagates downstream.
+
+### 🧠 Dual-Natured Architect (Logic Flow & Sequence Mapping)
+The **Architect Agent** doesn't just draw classes; it understands *behavior*. Using a specialized **dual-prompt strategy**, it switches between a "Structural" mindset (Classes, Components) and a "Behavioral" mindset (Sequences, Activities, State Machines) to draft diagrams that reveal how user input travels through the system (e.g., `User -> API -> Auth Middleware -> Database`), highlighting potential bottlenecks or insecure hand-offs.
+
+### 🛡️ Post-Generation Audit & Semantic Validation
+A dedicated **AuditNode** performs a 2-Phase post-generation review: first identifying potential duplicate diagrams from the plan, then comparing actual PUML content to verify. Inferior or redundant diagrams are automatically deprecated, ensuring the final output is a clean, reliable reference for the security assessment.
+
+### 🎨 Modern CLI
+Rich terminal output with dynamic progress bars, spinners, and ANSI colors for clear, real-time feedback during long-running assessments.
+
+---
+
+## 🛠️ Technical Architecture (PocketFlow DAG)
+
+The tool operates as a Directed Acyclic Graph (DAG) of specialized AI agents, mimicking a security team's workflow:
+
+1.  **Scout (Recon)**: Clones the target repo and maps the directory tree, filtering out non-functional artifacts.
+2.  **Surveyor (Scope Definition)**: Analyzes the file tree to select the critical path for audit (e.g., identifying `routes/`, `models/`, `controllers/`).
+3.  **Uploader (Data Ingestion)**: Batches and uploads target source code to the Gemini Files API with rate-limit handling.
+4.  **Summarizer (Knowledge Distillation)**:
+    * **Phase 1 (Map)**: Summarizes individual modules with `ResponseSupervisor` validation.
+    * **Phase 2 (Reduce)**: Identifies cross-module dependencies and data flows.
+5.  **Architect (Threat Modeler)**: Plans the diagram suite using a dual-prompt strategy:
+    * *Pass 1*: Behavioral Analysis (Sequences, Activities, State Machines).
+    * *Pass 2*: Structural Analysis (Classes, Components, ER Diagrams).
+    * *Pass 3*: AI-driven Deduplication & Feasibility Check.
+6.  **Human Handshake**: Interactive CLI for the auditor to select specific areas of interest.
+7.  **Drafter (Visualization)**: Generates strict PlantUML code representing the target architecture.
+8.  **Critic (Quality Assurance)**: Validates the PlantUML syntax and renders the final visual assets via Kroki.
+9.  **Auditor (Post-Generation Review)**: Detects and deprecates duplicate or redundant diagrams.
 
 ---
 
@@ -147,7 +173,6 @@ artifacts/
         ├── system_overview.png
         ├── detailed_flow.puml
         └── ...
-```
 ```
 
 ---
