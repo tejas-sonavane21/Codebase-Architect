@@ -1,35 +1,57 @@
-# 🎨 BlackBook Builder - UML Diagram Generator (Codebase-Architect)
+# 🛡️ Codebase-Architect: Automated Whitebox Reconnaissance & Threat Modeling
 
-**Automated Architectural Diagram Generator** powered by Google Gemini 2.5 Flash, PocketFlow, and PlantUML.
+> **"Enumeration is 90% of the battle. Visualize the attack surface before you audit it."**
 
-BlackBook Builder - UML Diagram Generator is basically a Repo-to-UML Diagrams Generator. It automatically clones a repository, understands its codebase through **Context Distillation**, plans focused architectural diagrams, and drafts them in PlantUML. It uses a Map-Reduce approach to handle large codebases without hitting token limits or server errors.
+**Codebase-Architect** is an automated **Whitebox Reconnaissance & Architecture Mapping utility** powered by **Google Gemini 2.5 Flash** and **PocketFlow**. It is designed to accelerate the "Mapping" phase of Source Code Reviews, Penetration Tests, and Threat Modeling sessions.
 
-## ✨ Features
+By leveraging Large Language Models (LLMs) with a Map-Reduce architecture, Codebase-Architect ingests complex repositories, distills their logic, and generates strict architectural diagrams (PlantUML). This allows security researchers to instantly visualize data flows, trust boundaries, and component interactions without spending hours manually tracing code.
 
-- **🔍 Smart Analysis**: Scans project structure and intelligently selects source files.
-- **⚗️ Context Distillation**: Uses a Map-Reduce "Summarizer Node" to distill thousands of lines of code into a compact `codebase_knowledge.xml`.
-- **🧠 Intelligent Planning**: An "Architect" agent plans focused diagrams (Class, Sequence, Component) based on semantic understanding.
-- **📝 Automated Drafting**: Generates strict PlantUML code.
-- **🛡️ Self-Correction**: A "Critic" node validates syntax, complexity, and renders diagrams via Kroki.
-- **🚀 Scalable**: Handles large repositories by batching uploads and using distilled knowledge for drafting.
+---
 
-## 🛠️ Architecture (PocketFlow)
+## 🚀 Mission: Why this tool?
 
-The agent is built as a Directed Acyclic Graph (DAG) of nodes:
+In complex **Whitebox Assessments** and **Secure Code Reviews**, auditors often struggle with "analysis paralysis" when facing large, unfamiliar codebases. Identifying logic vulnerabilities (Business Logic Errors, Race Conditions, Insecure Data Flows) requires a high-level mental model of the system.
 
-1.  **Scout**: Clones repo, maps structure, collapses junk directories.
-2.  **Surveyor**: Uses LLM to identify key files for analysis.
-3.  **Uploader**: Uploads files to Gemini Files API (with efficient batching & cleanup).
-4.  **Summarizer**: **(Core Innovation)** 
-    - Processes files 2-at-a-time (Map-Reduce).
-    - Maintains full content for small files (<50 lines).
-    - Summarizes large files.
-    - Identifies cross-file relationships (Pass 2).
-    - Produces `codebase_knowledge.xml`.
-5.  **Architect**: Plans diagrams using the distilled knowledge XML (preventing 500 errors).
-6.  **Human Handshake**: Interactive CLI for users to select diagrams.
-7.  **Drafter**: Generates PlantUML.
-8.  **Critic**: Validates & renders PNGs.
+**Codebase-Architect** bridges the gap between raw code and architectural understanding, enabling pentesters to:
+* **Rapidly Onboard**: Instantly understand the architecture of legacy or complex targets.
+* **Visualize Attack Surfaces**: Map entry points, API routes, and untrusted data flows.
+* **Identify Design Flaws**: Focus on Architecture Analysis rather than just syntax errors.
+* **Automate Threat Modeling**: Generate DFDs (Data Flow Diagrams) to identify STRIDE threats.
+
+---
+
+## ⚡ Key Capabilities
+
+### 🔍 Automated Attack Surface Discovery
+Instead of blindly scanning files, the **Surveyor Node** intelligently scans the project structure to identify high-value targets (Controllers, API endpoints, Auth middleware) versus noise (assets, configs), ensuring the analysis focuses on the logical core.
+
+### ⚗️ Context Distillation (Map-Reduce)
+Large codebases break standard LLM context windows. Codebase-Architect employs a **Map-Reduce "Summarizer"** to process files in batches. It distills thousands of lines of code into a semantic `codebase_knowledge.xml`—essentially creating a "cliff notes" version of the target's logic for the auditing agent.
+
+### 🧠 Logic Flow & Sequence Mapping
+The **Architect Agent** doesn't just draw classes; it understands *behavior*. It drafts **Sequence Diagrams** to visualize how user input travels through the system (e.g., `User -> API -> Auth Middleware -> Database`), highlighting potential bottlenecks or insecure hand-offs.
+
+### 🛡️ Semantic Validation (The Critic)
+A dedicated **Critic Node** validates the generated diagrams not just for syntax, but for architectural accuracy, ensuring the output is a reliable reference for the security assessment.
+
+---
+
+## 🛠️ Technical Architecture (PocketFlow DAG)
+
+The tool operates as a Directed Acyclic Graph (DAG) of specialized AI agents, mimicking a security team's workflow:
+
+1.  **Scout (Recon)**: Clones the target repo and maps the directory tree, filtering out non-functional artifacts.
+2.  **Surveyor (Scope Definition)**: Analyzes the file tree to select the critical path for audit (e.g., identifying `routes/`, `models/`, `controllers/`).
+3.  **Uploader (Data Ingestion)**: Batches and uploads target source code to the Gemini Files API with rate-limit handling.
+4.  **Summarizer (Knowledge Distillation)**:
+    * **Phase 1 (Map)**: Summarizes individual modules.
+    * **Phase 2 (Reduce)**: Identifies cross-module dependencies and data flows.
+5.  **Architect (Threat Modeler)**: Plans specific diagrams (Component, Sequence, Data Flow) based on the distilled knowledge base.
+6.  **Human Handshake**: Interactive CLI for the auditor to select specific areas of interest.
+7.  **Drafter (Visualization)**: Generates strict PlantUML code representing the target architecture.
+8.  **Critic (Quality Assurance)**: Validates the PlantUML syntax and renders the final visual assets via Kroki.
+
+---
 
 ## 🚀 Getting Started
 
