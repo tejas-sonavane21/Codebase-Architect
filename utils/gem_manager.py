@@ -19,6 +19,7 @@ import asyncio
 from pathlib import Path
 from typing import Optional, Dict
 from utils.console import console
+from utils.paths import GEMS_CONFIG_PATH
 
 
 class GemManager:
@@ -26,10 +27,10 @@ class GemManager:
     Professional gem management with local config persistence.
     
     All API operations use gem IDs directly (no fetch_gems).
-    Config stored in gemini_gems/gems_config.json.
+    Config stored in artifacts/gems_config.json.
     """
     
-    CONFIG_FILE = Path(__file__).parent.parent / "gemini_gems" / "gems_config.json"
+    CONFIG_FILE = GEMS_CONFIG_PATH
     
     # =========================================================
     # GEM CONFIGURATIONS - Central definition for all gems

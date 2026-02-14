@@ -13,6 +13,7 @@ from utils.gemini_client import get_client
 from utils.prompts import get_prompt, get_gem_id
 from utils.output_cleaner import clean_json
 from utils.console import console
+from utils.paths import UPLOAD_CONFIG_FILE
 
 
 class SurveyorNode(Node):
@@ -107,8 +108,9 @@ Example format:
         shared["upload_config"] = exec_res
         shared["project_analysis"] = exec_res.get("analysis", "")
         
-        clone_dir = shared.get("clone_dir", ".")
-        config_file = os.path.join(clone_dir, "upload_config.json")
+        shared["project_analysis"] = exec_res.get("analysis", "")
+        
+        config_file = str(UPLOAD_CONFIG_FILE)
         
         with open(config_file, "w", encoding="utf-8") as f:
             json.dump(exec_res, f, indent=2)

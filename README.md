@@ -1,52 +1,58 @@
-# 🎨 BlackBook Builder - UML Diagram Generator (Codebase-Architect)
+# 🏯 Codebase Architect - Autonomous Diagram Generator
 
-**Automated Architectural Diagram Generator** powered by Google Gemini 2.5 Flash, PocketFlow, and PlantUML.
+**An Agentic AI System** that reads code, understands architecture, and drafts professional PlantUML diagrams. Powered by Google Gemini 2.5 Flash, PocketFlow, and a dual-natured Architect agent.
 
-BlackBook Builder - UML Diagram Generator is basically a Repo-to-UML Diagrams Generator. It automatically clones a repository, understands its codebase through **Context Distillation**, plans focused architectural diagrams, and drafts them in PlantUML. It uses a Map-Reduce approach to handle large codebases without hitting token limits or server errors.
+![Banner](https://img.shields.io/badge/Status-Operational-green) ![Python](https://img.shields.io/badge/Python-3.11%2B-blue) ![License](https://img.shields.io/badge/License-MIT-purple)
 
-## ✨ Features
+## 🌟 Core Features
 
-- **🔍 Smart Analysis**: Scans project structure and intelligently selects source files.
-- **⚗️ Context Distillation**: Uses a Map-Reduce "Summarizer Node" to distill thousands of lines of code into a compact `codebase_knowledge.xml`.
-- **🧠 Intelligent Planning**: An "Architect" agent plans focused diagrams (Class, Sequence, Component) based on semantic understanding.
-- **📝 Automated Drafting**: Generates strict PlantUML code.
-- **🛡️ Self-Correction**: A "Critic" node validates syntax, complexity, and renders diagrams via Kroki.
-- **🚀 Scalable**: Handles large repositories by batching uploads and using distilled knowledge for drafting.
+- **🔍 Intelligent Scouting**: Maps project structure, filtering noise and collapsing junk directories.
+- **📚 Context Distillation**: Distills thousands of lines of code into a semantic knowledge base (`xml`) using a Map-Reduce approach with **Supervisor** validation.
+- **🧠 Dual-Natured Architect**: A specialized agent that switches between "Structural" and "Behavioral" mindsets to plan complex diagrams.
+- **🛡️ Audit & Supervision**: 
+  - **ResponseSupervisor**: Validates LLM outputs (XML/JSON) in real-time during generation.
+  - **AuditNode**: Post-generation critic that visually compares generated diagrams against the original code plan.
+- **📝 Automated Drafting**: Generates strict, syntax-correct PlantUML code.
+- **🎨 Modern CLI**: Rich terminal output with dynamic progress bars, spinners, and ANSI colors.
 
-## 🛠️ Architecture (PocketFlow)
+---
 
-The agent is built as a Directed Acyclic Graph (DAG) of nodes:
+## 🏗️ Architecture (PocketFlow)
 
-1.  **Scout**: Clones repo, maps structure, collapses junk directories.
-2.  **Surveyor**: Uses LLM to identify key files for analysis.
-3.  **Uploader**: Uploads files to Gemini Files API (with efficient batching & cleanup).
-4.  **Summarizer**: **(Core Innovation)** 
-    - Processes files 2-at-a-time (Map-Reduce).
-    - Maintains full content for small files (<50 lines).
-    - Summarizes large files.
-    - Identifies cross-file relationships (Pass 2).
-    - Produces `codebase_knowledge.xml`.
-5.  **Architect**: Plans diagrams using the distilled knowledge XML (preventing 500 errors).
-6.  **Human Handshake**: Interactive CLI for users to select diagrams.
-7.  **Drafter**: Generates PlantUML.
-8.  **Critic**: Validates & renders PNGs.
+The system operates as a Directed Acyclic Graph (DAG) of specialized nodes:
+
+1.  **Scout**: Clones the repo and builds a file map.
+2.  **Surveyor**: "Interviews" the codebase to select the most relevant 50-100 files for analysis.
+3.  **Uploader**: Uploads files to Gemini 1.5 Pro's context window (via Files API).
+4.  **Summarizer**: Builds `codebase_knowledge.xml`.
+    *   *Innovation*: Uses `generate_with_critique` loops to ensure valid XML.
+5.  **Architect**: Plans the diagram suite.
+    *   *Pass 1*: Structural Analysis (Classes, Components).
+    *   *Pass 2*: Behavioral Analysis (Sequences, Activities).
+    *   *Pass 3*: Deduplication & Feasibility Check.
+6.  **Human Handshake**: Interactive menu for the user to select which diagrams to draft.
+7.  **Drafter**: Writes the PlantUML code.
+8.  **Audit**: (Optional) Reviews the final artifacts for hallucinations.
+
+---
 
 ## 🚀 Getting Started
 
 ### Prerequisites
 
 - Python 3.11+
-- Google Gemini API Key
+- A Google Account (for Gemini)
+- `git`
 
 ### Installation
 
-1.  Clone this repository:
+1.  Clone the repository:
     ```bash
     git clone https://github.com/tejas-sonavane21/Codebase-Architect.git
     cd Codebase-Architect
     ```
 
-2.  Create a virtual environment:
+2.  Create virtual environment:
     ```bash
     python -m venv .venv
     .\.venv\Scripts\activate  # Windows
@@ -58,43 +64,98 @@ The agent is built as a Directed Acyclic Graph (DAG) of nodes:
     pip install -r requirements.txt
     ```
 
-4.  Configure environment:
-    Create a `.env` file:
+### 🔐 Authentication (Cookies)
+
+This tool uses the `gemini_webapi` library which mimics a browser session. You need to export your Gemini cookies:
+
+1.  Go to [gemini.google.com](https://gemini.google.com).
+2.  Open Developer Tools (F12) -> Application -> Cookies.
+3.  Copy the values for:
+    - `__Secure-1PSID`
+    - `__Secure-1PSIDTS`
+4.  Create a `.env` file:
     ```ini
-    GEMINI_API_KEY=your_gemini_api_key_here
+    # Authentication (Required)
+    GEMINI_SECURE_1PSID=your_value_here
+    GEMINI_SECURE_1PSIDTS=your_value_here
+    
+    # Model Configuration
+    GEMINI_WEB_MODEL=gemini-3.0-pro
+    
+    # Development Options
+    DEV_MODE=true           # Enable gem management commands
+    DEBUG_FAILED_DIAGRAMS=false
+    CONSOLE_VERBOSITY=1     # 0=Silent, 1=Normal, 2=Verbose
     ```
 
-### Usage
+---
 
-Run the tool with a GitHub repository URL:
+## 💻 Usage
 
+### Initialization (First Run)
+Before running the tool for the first time, you must create the necessary "Gems" (System Prompts) in your Gemini account:
+
+```bash
+# Enable developer mode temporarily to create gems
+# Ensure DEV_MODE=true is set in your .env
+python main.py --gems-create
+```
+
+This will create specialized agents like `codebase-architect`, `codebase-surveyor`, etc.
+
+### Basic Run
+Analyze a remote repository and generate diagrams:
 ```bash
 python main.py https://github.com/tejas-sonavane21/VulnScraper
 ```
 
-The tool will:
-1.  Clone the repo to `cloned_repo/`.
-2.  Analyze and upload files to Gemini.
-3.  Build a knowledge base (`codebase_knowledge.xml`).
-4.  Propose diagrams.
-5.  Ask you which ones to generate.
-6.  Save outcomes to `generated_diagrams/` (both `.puml` and `.png`).
+### Verbose Mode
+Debug internal API calls and agent "thoughts":
+```bash
+python main.py https://github.com/user/repo --verbose
+```
 
-## 📁 Output Structure
+### Manage "Gems" (System Prompts)
+The system uses persistent "Gems" on your Gemini account to store specialized agent personas.
+```bash
+# List all active gems
+python main.py --gems-list
+
+# Force update logic gems
+python main.py --gems-update
+```
+
+---
+
+### Output Structure
+
+All artifacts are stored in the `artifacts/` directory:
 
 ```
-generated_diagrams/
-├── vulnscraper_system_context.png
-├── vulnscraper_system_context.puml
-├── vulnscraper_exploit_generation_workflow.png
-├── vulnscraper_exploit_generation_workflow.puml
-...
+artifacts/
+├── gemini_gems/                # Persistent Gem configuration
+│   └── gems_config.json
+├── audit_reports/              # Diagram Audit Reports (Persistent)
+│   └── <RepoName>-Audit.md     # Audit report for specific repo
+├── analysis/                   # Temporary runtime analysis files (cleared each run)
+│   ├── cloned_repo/            # Clone of the target repository
+│   ├── codebase_knowledge.xml  # Distilled knowledge base
+│   ├── project_map.txt         # File structure map
+│   └── file_inventory.json     # File inventory
+└── results/                    # Final output (Persistent)
+    └── <repo_name>/            # Diagrams for specific repo
+        ├── system_overview.png
+        ├── detailed_flow.puml
+        └── ...
 ```
+```
+
+---
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome! Please follow the "Clean Console" standard for any new output.
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT License - see [LICENSE](LICENSE) for details.

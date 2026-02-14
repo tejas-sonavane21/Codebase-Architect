@@ -43,6 +43,8 @@ env/
 *.swp
 
 # BlackBook Builder Specific
+# BlackBook Builder Specific
+artifacts/
 cloned_repo/
 generated_diagrams/
 codebase_knowledge.xml

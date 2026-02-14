@@ -17,6 +17,7 @@ from nodes.human_handshake import HumanHandshakeNode
 from nodes.drafter import DrafterNode
 from nodes.critic import CriticNode
 from nodes.audit import AuditNode
+from utils.paths import ANALYSIS_DIR, RESULTS_DIR, ensure_dirs
 
 
 def create_diagram_generation_flow() -> Flow:
@@ -94,32 +95,57 @@ def create_diagram_generation_flow() -> Flow:
     return flow
 
 
-def run_flow(repo_url: str, output_dir: str = "generated_diagrams") -> dict:
+def run_flow(repo_url: str, output_dir: str = None) -> dict:
     """Run the complete diagram generation flow.
     
     Args:
-        repo_url: GitHub repository URL to analyze.
-        output_dir: Directory to save generated diagrams.
+        repo_url: GitHub repository URL.
+        output_dir: Directory to save generated diagrams (default: artifacts/results/<repo_name>).
         
     Returns:
-        Dict with results including generated diagram paths.
+        Shared state dictionary.
     """
+    import shutil
+    import os
+    
+    # Ensure persistent directories exist
+    ensure_dirs()
+    
+    # Clean up previous analysis artifacts (Pre-run cleanup)
+    if ANALYSIS_DIR.exists():
+        console.debug(f"Cleaning previous analysis: {ANALYSIS_DIR}")
+        def remove_readonly(func, path, excinfo):
+            import stat
+            os.chmod(path, stat.S_IWRITE)
+            func(path)
+        shutil.rmtree(ANALYSIS_DIR, onerror=remove_readonly)
+    
+    ANALYSIS_DIR.mkdir(exist_ok=True)
+    
+    # Determine output directory
+    if output_dir:
+        target_dir = output_dir
+    else:
+        repo_name = repo_url.rstrip("/").split("/")[-1]
+        if repo_name.endswith(".git"):
+            repo_name = repo_name[:-4]
+        target_dir = str(RESULTS_DIR / repo_name)
+    
     # Create the flow
     flow = create_diagram_generation_flow()
     
     # Initialize shared store
-    import os
     project_root = os.path.dirname(os.path.abspath(__file__))
     
     shared = {
         "repo_url": repo_url,
-        "output_dir": output_dir,
+        "output_dir": target_dir,
         "project_root": project_root,
     }
     
     console.header("CODEBASE ARCHITECT")
     console.info(f"Repository: {repo_url}")
-    console.info(f"Output: {output_dir}/")
+    console.info(f"Output: {target_dir}/")
     console.blank()
     
     try:
@@ -146,7 +172,7 @@ def run_flow(repo_url: str, output_dir: str = "generated_diagrams") -> dict:
         return {
             "success": True,
             "diagrams": generated,
-            "output_dir": output_dir,
+            "output_dir": target_dir,
         }
         
     except Exception as e:

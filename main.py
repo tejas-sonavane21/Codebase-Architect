@@ -25,12 +25,13 @@ import argparse
 import asyncio
 import os
 import sys
-import os
 from pathlib import Path
 from dotenv import load_dotenv
+
 from utils.gemini_client import get_client
 from utils.gem_manager import GemManager
 from utils.console import console
+from flow import run_flow
 
 # Ensure parent directory is in path for imports
 sys.path.insert(0, str(Path(__file__).parent))
@@ -190,8 +191,8 @@ The tool will:
     
     parser.add_argument(
         "-o", "--output",
-        default="generated_diagrams",
-        help="Output directory for diagrams (default: generated_diagrams)"
+        default=None,
+        help="Output directory (default: artifacts/results/<repo_name>)"
     )
     
     parser.add_argument(
@@ -270,12 +271,14 @@ The tool will:
         sys.exit(1)
     
     # Create output directory
-    output_dir = os.path.abspath(args.output)
-    os.makedirs(output_dir, exist_ok=True)
+    if args.output:
+        output_dir = os.path.abspath(args.output)
+        os.makedirs(output_dir, exist_ok=True)
+    else:
+        output_dir = None
     
     # Import and run the flow
     try:
-        from flow import run_flow
         
         result = run_flow(
             repo_url=repo_url,

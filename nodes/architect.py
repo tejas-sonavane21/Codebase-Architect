@@ -19,6 +19,7 @@ from utils.prompts import get_prompt, get_gem_id
 from utils.console import console
 from utils.gem_manager import update_gem
 from utils.output_cleaner import clean_json
+from utils.paths import DIAGRAM_PLAN_FILE
 
 
 # ID offset for structural diagrams (prevents ID collision)
@@ -242,8 +243,7 @@ Propose specific, focused diagrams that would help a developer understand this c
         shared["diagram_plan"] = exec_res
         shared["all_diagrams"] = exec_res.get("diagrams", [])
         
-        clone_path = shared.get("clone_path", ".")
-        plan_file = os.path.join(clone_path, "..", "diagram_plan.json")
+        plan_file = str(DIAGRAM_PLAN_FILE)
         
         with open(plan_file, "w", encoding="utf-8") as f:
             json.dump(exec_res, f, indent=2)

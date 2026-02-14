@@ -15,6 +15,7 @@ from utils.prompts import get_prompt, get_gem_id
 from utils.output_cleaner import clean_xml
 from utils.response_supervisor import ResponseSupervisor
 from utils.console import console
+from utils.paths import KNOWLEDGE_XML_FILE
 
 
 # Threshold for keeping full content vs summarizing
@@ -287,7 +288,7 @@ Return the COMPLETE updated XML."""
         console.success("Pass 2 complete: Relationships identified", indent=1)
         
         # Save knowledge XML
-        knowledge_file = os.path.join(os.path.dirname(clone_path), "codebase_knowledge.xml")
+        knowledge_file = str(KNOWLEDGE_XML_FILE)
         with open(knowledge_file, "w", encoding="utf-8") as f:
             f.write(self.knowledge_xml)
         

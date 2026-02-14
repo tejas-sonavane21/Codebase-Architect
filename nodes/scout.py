@@ -15,6 +15,7 @@ from pocketflow import Node
 
 from utils.security import redact_file_content
 from utils.console import console
+from utils.paths import CLONE_DIR, PROJECT_MAP_FILE, FILE_INVENTORY_FILE
 
 
 class ScoutNode(Node):
@@ -58,12 +59,9 @@ class ScoutNode(Node):
         repo_url = shared.get("repo_url")
         if not repo_url:
             raise ValueError("No 'repo_url' in shared store")
-        
-        # Get project root directory (where main.py is located)
-        project_root = shared.get("project_root", os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        
-        # Create cloned_repo directory in project root
-        self.clone_dir = os.path.join(project_root, "cloned_repo")
+            
+        # Use centralized clone directory
+        self.clone_dir = str(CLONE_DIR)
         
         # Clean up existing clone if present
         if os.path.exists(self.clone_dir):
@@ -253,13 +251,13 @@ class ScoutNode(Node):
         shared["clone_dir"] = self.clone_dir
         
         # Save project map to file (for Gemini context)
-        map_file = os.path.join(self.clone_dir, "project_map.txt")
+        map_file = str(PROJECT_MAP_FILE)
         with open(map_file, "w", encoding="utf-8") as f:
             f.write(exec_res["project_map"])
         shared["project_map_file"] = map_file
         
         # Save structured inventory as JSON (for programmatic access)
-        inventory_file = os.path.join(self.clone_dir, "file_inventory.json")
+        inventory_file = str(FILE_INVENTORY_FILE)
         with open(inventory_file, "w", encoding="utf-8") as f:
             json.dump({
                 "stats": exec_res["stats"],
@@ -273,12 +271,14 @@ class ScoutNode(Node):
         return "default"
     
     def cleanup(self, shared: dict):
-        """Clean up cloned repository.
+        """Clean up entire analysis directory after execution.
         
+        Removes all temporary analysis files including cloned repository,
+        project maps, file inventories, and knowledge XML.
         Handles Windows .git folder by removing read-only attributes.
         """
-        clone_dir = shared.get("clone_dir")
-        if clone_dir and os.path.exists(clone_dir):
+        # Clean up entire analysis directory
+        if ANALYSIS_DIR.exists():
             # On Windows, .git folder files are read-only and need special handling
             def remove_readonly(func, path, excinfo):
                 """Error handler that removes read-only attribute and retries."""
@@ -287,8 +287,8 @@ class ScoutNode(Node):
                 func(path)
             
             try:
-                shutil.rmtree(clone_dir, onerror=remove_readonly)
-                console.debug("Cleaned up cloned repository")
+                shutil.rmtree(ANALYSIS_DIR, onerror=remove_readonly)
+                console.debug(f"Cleaned up analysis directory: {ANALYSIS_DIR}")
             except Exception as e:
                 console.debug(f"Cleanup warning: {e}")
 

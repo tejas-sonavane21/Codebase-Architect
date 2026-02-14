@@ -13,6 +13,7 @@ from pocketflow import Node
 from utils.console import console
 from utils.gemini_client import get_client
 from utils.security import redact_file_content
+from utils.paths import PROJECT_MAP_FILE, FILE_INVENTORY_FILE
 
 
 class UploaderNode(Node):
@@ -76,16 +77,16 @@ class UploaderNode(Node):
         # Gather context files (project_map.txt, file_inventory.json)
         context_files = []
         
-        project_map_file = shared.get("project_map_file")
-        if project_map_file and os.path.exists(project_map_file):
+        project_map_file = str(PROJECT_MAP_FILE)
+        if os.path.exists(project_map_file):
             context_files.append({
                 "path": project_map_file,
                 "display_name": "project_map.txt",
                 "is_context": True,
             })
         
-        inventory_file = shared.get("inventory_file")
-        if inventory_file and os.path.exists(inventory_file):
+        inventory_file = str(FILE_INVENTORY_FILE)
+        if os.path.exists(inventory_file):
             context_files.append({
                 "path": inventory_file,
                 "display_name": "file_inventory.json",

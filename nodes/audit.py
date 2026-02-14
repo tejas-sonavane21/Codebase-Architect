@@ -22,6 +22,7 @@ from utils.gemini_client import get_client
 from utils.prompts import get_prompt, get_gem_id
 from utils.output_cleaner import clean_json
 from utils.console import console
+from utils.paths import DEPRECATED_DIR, AUDIT_REPORTS_DIR, RESULTS_DIR
 
 
 class AuditNode(Node):
@@ -41,7 +42,8 @@ class AuditNode(Node):
     def prep(self, shared: dict) -> dict:
         """Gather context for audit."""
         self.output_dir = shared.get("output_dir", "generated_diagrams")
-        self.deprecated_dir = os.path.join(self.output_dir, "_deprecated")
+        
+        self.deprecated_dir = str(DEPRECATED_DIR)
         
         # Create deprecated folder
         os.makedirs(self.deprecated_dir, exist_ok=True)
@@ -380,7 +382,11 @@ Return JSON:
     
     def _generate_report(self, decisions: List[Dict], moved: int, kept: int) -> str:
         """Generate audit_report.md summarizing the audit."""
-        report_path = os.path.join(self.output_dir, "audit_report.md")
+        
+        # Determine repo name from output_dir (which is results/<repo_name>)
+        repo_name = os.path.basename(self.output_dir.strip(os.sep))
+        report_filename = f"{repo_name}-Audit.md"
+        report_path = str(AUDIT_REPORTS_DIR / report_filename)
         
         lines = [
             "# Diagram Audit Report",

@@ -107,8 +107,8 @@ class Console:
         return self._verbosity >= level
     
     def _clear_line(self):
-        """Clear the current line."""
-        sys.stdout.write("\r" + " " * self._last_line_length + "\r")
+        """Clear the current line using ANSI escape sequence."""
+        sys.stdout.write("\r\033[K")
         sys.stdout.flush()
     
     def _print(self, message: str, end: str = "\n", level: int = NORMAL):
