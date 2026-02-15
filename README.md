@@ -46,7 +46,7 @@ The tool operates as a Directed Acyclic Graph (DAG) of specialized AI agents, mi
 4.  **Summarizer (Knowledge Distillation)**:
     * **Phase 1 (Map)**: Summarizes individual modules.
     * **Phase 2 (Reduce)**: Identifies cross-module dependencies and data flows.
-5.  **Architect (Threat Modeler)**: Plans specific diagrams (Component, Sequence, Data Flow) based on the distilled knowledge base.
+5.  **Architect (Attack Surface Planner)**: Plans specific diagrams (Component, Sequence, Data Flow) based on the distilled knowledge base.
 6.  **Human Handshake**: Interactive CLI for the auditor to select specific areas of interest.
 7.  **Drafter (Visualization)**: Generates strict PlantUML code representing the target architecture.
 8.  **Critic (Quality Assurance)**: Validates the PlantUML syntax and renders the final visual assets via Kroki.
