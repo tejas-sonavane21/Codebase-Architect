@@ -1,4 +1,4 @@
-# 🛡️ Codebase-Architect: Automated Whitebox Reconnaissance & Threat Modeling
+# 🛡️ Codebase-Architect: Automated Whitebox Reconnaissance For Threat Modeling
 
 > **"Enumeration is 90% of the battle. Visualize the attack surface before you audit it."**
 
