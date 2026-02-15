@@ -376,6 +376,114 @@ WRONG: Customer ||--o{ Order (no label = TERMINATION)
 === COMPLETENESS ===
 Show ALL entities and their relationships.
 An ER diagram with < 3 entities = TOO SIMPLE = TERMINATION""",
+
+    # ==========================================================
+    # DFD (DATA FLOW DIAGRAM) RULES - WITH STRIDE THREAT MODEL
+    # ==========================================================
+    "dfd": """=== DFD (DATA FLOW DIAGRAM) RULES ===
+
+=== CRITICAL: USE @startuml NOT @startdfd ===
+PlantUML does NOT support @startdfd. You MUST use @startuml.
+Using @startdfd = SYNTAX ERROR = RENDER FAILURE = TERMINATION
+
+=== STRUCTURE (MANDATORY) ===
+@startuml
+!theme blueprint
+title Data Flow Diagram - [System Name]
+
+' === EXTERNAL ENTITIES (actors/systems outside trust boundary) ===
+actor "ExternalEntity" as EE1
+
+' === TRUST BOUNDARIES (dashed rectangles) ===
+rectangle "Trust Boundary Name" #line.dashed {
+    ' === PROCESSES (components inside boundary) ===
+    component "ProcessName" as P1
+    
+    ' === DATA STORES ===
+    database "DataStoreName" as DS1
+}
+
+' === DATA FLOWS (labeled arrows) ===
+EE1 --> P1 : data_description
+P1 --> DS1 : store(data)
+DS1 --> P1 : retrieve(data)
+
+' === STRIDE ANNOTATIONS (notes on boundary crossings) ===
+note on link
+    **STRIDE**: Spoofing, Tampering
+    Crosses trust boundary: validate input
+end note
+
+@enduml
+
+=== ELEMENT TYPES ===
+1. EXTERNAL ENTITY: actor or rectangle OUTSIDE all trust boundaries
+   - Users, external APIs, third-party services
+   CORRECT: actor "CLI User" as User
+   CORRECT: rectangle "External API" as ExtAPI
+
+2. PROCESS: component INSIDE a trust boundary
+   - Application logic, services, handlers
+   CORRECT: component "AuthenticationService" as AuthService
+   WRONG: component "AS" (abbreviation = TERMINATION)
+
+3. DATA STORE: database element
+   - Databases, file systems, caches, session stores
+   CORRECT: database "UserDatabase" as UserDB
+   CORRECT: database "SessionCache" as Cache
+
+4. TRUST BOUNDARY: dashed rectangle grouping related processes
+   CORRECT: rectangle "Internal Network" #line.dashed { ... }
+   CORRECT: rectangle "DMZ" #line.dashed { ... }
+   WRONG: rectangle "Boundary" (too generic = TERMINATION)
+
+=== TRUST BOUNDARY RULES (MANDATORY) ===
+Every DFD MUST have at least 2 trust boundaries, for example:
+- "External/Untrusted Zone" (users, external APIs)
+- "Application Layer" (web server, API handlers)
+- "Data Layer" (databases, file stores)
+- "Internal Services" (background workers, message queues)
+
+=== DATA FLOW RULES (MANDATORY) ===
+Every arrow MUST be labeled with what data flows:
+CORRECT: User --> WebApp : HTTP Request (credentials)
+CORRECT: WebApp --> Database : SQL Query (user_id)
+CORRECT: Database --> WebApp : ResultSet (user_record)
+WRONG: User --> WebApp (no label = TERMINATION)
+WRONG: A --> B : "data" (too vague = TERMINATION)
+
+=== STRIDE THREAT ANNOTATIONS (MANDATORY) ===
+Every data flow that CROSSES a trust boundary MUST have a STRIDE note.
+Use "note on link" syntax attached to boundary-crossing arrows.
+
+STRIDE Categories (annotate ALL that apply):
+- **S**poofing: Can the source be impersonated? (auth entry points)
+- **T**ampering: Can the data be modified in transit? (user inputs)
+- **R**epudiation: Can the action be denied? (logging gaps)
+- **I**nformation Disclosure: Can data leak? (error messages, responses)
+- **D**enial of Service: Can the flow be overwhelmed? (public endpoints)
+- **E**levation of Privilege: Can access controls be bypassed? (auth checks)
+
+Example STRIDE note:
+User --> WebApp : login(username, password)
+note on link
+    **STRIDE**: S, T, D
+    Spoofing: Credential stuffing
+    Tampering: Parameter injection
+    DoS: Brute-force attempts
+end note
+
+=== NAMING RULES (ZERO TOLERANCE) ===
+Use FULL names from codebase_knowledge.xml.
+CORRECT: component "PaymentProcessor" as PaymentProcessor
+WRONG: component "PP" as PP (abbreviation = TERMINATION)
+
+=== COMPLETENESS ===
+- Minimum 2 trust boundaries
+- Minimum 3 data flows
+- At least 1 STRIDE annotation on a boundary-crossing flow
+- A DFD with no trust boundaries = NOT A DFD = TERMINATION
+- A DFD with no STRIDE notes = MISSING THREAT ANALYSIS = TERMINATION""",
 }
 
 
@@ -387,7 +495,7 @@ def get_diagram_rules(diagram_type: str) -> str:
     Get the rules for a specific diagram type.
     
     Args:
-        diagram_type: The type of diagram (class, component, sequence, activity, state, usecase)
+        diagram_type: The type of diagram (class, component, sequence, activity, state, usecase, er, dfd)
         
     Returns:
         String containing the rules for that diagram type, or empty string if not found.
@@ -415,6 +523,10 @@ def get_diagram_rules(diagram_type: str) -> str:
         "entity relationship": "er",
         "erd": "er",
         "er diagram": "er",
+        "dfd": "dfd",
+        "data flow": "dfd",
+        "data flow diagram": "dfd",
+        "dataflow": "dfd",
     }
     
     mapped_type = type_mapping.get(normalized, normalized)

@@ -15,7 +15,7 @@ from pocketflow import Node
 
 from utils.security import redact_file_content
 from utils.console import console
-from utils.paths import CLONE_DIR, PROJECT_MAP_FILE, FILE_INVENTORY_FILE
+from utils.paths import ANALYSIS_DIR, CLONE_DIR, PROJECT_MAP_FILE, FILE_INVENTORY_FILE
 
 
 class ScoutNode(Node):

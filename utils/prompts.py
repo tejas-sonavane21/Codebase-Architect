@@ -278,6 +278,13 @@ Before proposing, SCAN specifically for these patterns:
    -> PROTOCOL: Propose an ER diagram for the data model.
 4. USER FLOWS: Look for CLI arguments, API endpoints, or user-facing methods.
    -> PROTOCOL: Propose a USE CASE diagram for user goals.
+5. DATA FLOWS & EXTERNAL INTERACTIONS: Look for API routes, external service calls (HTTP clients, database queries), user input handling, or file I/O operations that cross system boundaries.
+   -> PROTOCOL: Propose a DFD diagram. You MUST explicitly identify in expected_elements:
+      - External Entities: users, external APIs, third-party services the system consumes
+      - Processes: internal handlers, services, orchestrators that transform data
+      - Data Stores: databases, caches, file exports, session stores
+      - Trust Boundaries: where data crosses from untrusted (external) to trusted (internal) zones
+      - STRIDE relevance: which boundary crossings have spoofing, tampering, or injection risk
 
 === DIAGRAM VALUE ASSESSMENT ===
 
@@ -302,6 +309,7 @@ REJECT a diagram if it:
 5. STATE: Lifecycle of a SINGLE object (e.g., Request, Game, Connection) with transitions
 6. USE CASE: User goals, Command Line usage, API endpoints, System boundaries
 7. ER (Entity-Relationship): Database schemas, core data entities, json return structures
+8. DFD (Data Flow Diagram): Trust boundaries, data flows between processes/stores/external entities, STRIDE threat annotations
 
 === PLANNING RULES ===
 1. FULL NAMES: Use complete class/function names from the codebase. Never abbreviate.
@@ -317,7 +325,7 @@ REJECT a diagram if it:
         {
             "id": 1,
             "name": "Descriptive Diagram Name",
-            "type": "class|sequence|component|activity|state|usecase|er",
+            "type": "class|sequence|component|activity|state|usecase|er|dfd",
             "focus": "What specific insight this diagram reveals",
             "files": ["path/to/relevant/file1.py", "path/to/file2.py"],
             "expected_elements": ["Element1", "Element2", "relationship arrows"],
@@ -364,6 +372,13 @@ Before proposing, SCAN specifically for these patterns:
    -> PROTOCOL: Propose a COMPONENT diagram showing layer architecture.
 4. EXTERNAL INTEGRATIONS: Look for API clients, database connections, file I/O patterns.
    -> PROTOCOL: Propose a COMPONENT diagram showing external boundaries.
+5. DATA FLOW PATHS: Look for request handlers that process user input through multiple layers (e.g., Controller -> Service -> Repository -> DB), or external API clients that fetch untrusted data.
+   -> PROTOCOL: Propose a DFD diagram. You MUST explicitly identify in expected_elements:
+      - External Entities: users, external APIs, third-party services
+      - Processes: internal components that transform or route data
+      - Data Stores: databases, file systems, caches
+      - Trust Boundaries: where data crosses from untrusted to trusted zones
+      - STRIDE relevance: which boundary crossings pose security risks
 
 === DIAGRAM VALUE ASSESSMENT ===
 
@@ -388,6 +403,7 @@ REJECT a diagram if it:
 5. STATE: Lifecycle of a SINGLE object (e.g., Request, Game, Connection) with transitions
 6. USE CASE: User goals, Command Line usage, API endpoints, System boundaries
 7. ER (Entity-Relationship): Database schemas, core data entities, json return structures
+8. DFD (Data Flow Diagram): Trust boundaries, data flows between processes/stores/external entities, STRIDE threat annotations
 
 === PLANNING RULES ===
 1. FULL NAMES: Use complete class/function names from the codebase. Never abbreviate.
@@ -403,7 +419,7 @@ REJECT a diagram if it:
         {
             "id": 1,
             "name": "Descriptive Diagram Name",
-            "type": "class|sequence|component|activity|state|usecase|er",
+            "type": "class|sequence|component|activity|state|usecase|er|dfd",
             "focus": "What specific insight this diagram reveals",
             "files": ["path/to/relevant/file1.py", "path/to/file2.py"],
             "expected_elements": ["Element1", "Element2", "relationship arrows"],

@@ -286,7 +286,7 @@ The tool will:
         )
         
         if result["success"]:
-            console.success(f"Diagrams saved to: {output_dir}")
+            console.success(f"Diagrams saved to: {result['output_dir']}")
             sys.exit(0)
         else:
             console.error(f"Generation failed: {result.get('error', 'Unknown error')}")

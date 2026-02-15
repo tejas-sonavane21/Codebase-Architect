@@ -1,4 +1,4 @@
-# 🛡️ Codebase-Architect: Automated Whitebox Reconnaissance & Threat Modeling
+# 🛡️ Codebase-Architect: Automated Whitebox Reconnaissance For Threat Modeling
 
 > **"Enumeration is 90% of the battle. Visualize the attack surface before you audit it."**
 
@@ -51,9 +51,9 @@ The tool operates as a Directed Acyclic Graph (DAG) of specialized AI agents, mi
 4.  **Summarizer (Knowledge Distillation)**:
     * **Phase 1 (Map)**: Summarizes individual modules with `ResponseSupervisor` validation.
     * **Phase 2 (Reduce)**: Identifies cross-module dependencies and data flows.
-5.  **Architect (Threat Modeler)**: Plans the diagram suite using a dual-prompt strategy:
+5.  **Architect (Attack Surface Planner)**: Plans the diagram suite using a dual-prompt strategy:
     * *Pass 1*: Behavioral Analysis (Sequences, Activities, State Machines).
-    * *Pass 2*: Structural Analysis (Classes, Components, ER Diagrams).
+    * *Pass 2*: Structural Analysis (Classes, Components, ER Diagrams, DFDs with STRIDE).
     * *Pass 3*: AI-driven Deduplication & Feasibility Check.
 6.  **Human Handshake**: Interactive CLI for the auditor to select specific areas of interest.
 7.  **Drafter (Visualization)**: Generates strict PlantUML code representing the target architecture.

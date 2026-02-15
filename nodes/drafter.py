@@ -117,6 +117,11 @@ class DrafterNode(Node):
         if diagram.get("files"):
             prompt_parts.append(f"Relevant Files: {', '.join(diagram['files'])}")
         
+        if diagram.get("expected_elements"):
+            prompt_parts.append(f"\nExpected Elements (MUST include ALL):")
+            for elem in diagram["expected_elements"]:
+                prompt_parts.append(f"  - {elem}")
+        
         prompt = "\n".join(prompt_parts)
         
         # Get knowledge context
